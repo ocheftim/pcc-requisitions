@@ -1,0 +1,998 @@
+{
+  "weekNumber": 6,
+  "semester": "Fall 2025",
+  "dateCreated": "2025-11-21T21:22:29.619Z",
+  "totalOrders": 4,
+  "orders": [
+    {
+      "instructor": "McKoy",
+      "course": "CUL160",
+      "day": "Wednesday"
+    },
+    {
+      "instructor": "McKoy",
+      "course": "CUL260",
+      "day": "Tuesday"
+    },
+    {
+      "instructor": "Wong",
+      "course": "CUL140",
+      "day": "Tuesday"
+    },
+    {
+      "instructor": "Staff",
+      "course": "CUL168",
+      "day": "Monday"
+    }
+  ],
+  "items": [
+    {
+      "ingredientId": "DAI-004",
+      "ingredientName": "Butter",
+      "category": "DAIRY",
+      "requestedQty": 11,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 6
+        },
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 4
+        },
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DAI-009",
+      "ingredientName": "Cheddar",
+      "category": "DAIRY",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DAI-006",
+      "ingredientName": "Eggs",
+      "category": "DAIRY",
+      "requestedQty": 15,
+      "unit": "doz",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 8
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 6
+        },
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DAI-002",
+      "ingredientName": "Heavy Cream",
+      "category": "DAIRY",
+      "requestedQty": 18,
+      "unit": "qt",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 2
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 16
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DAI-001",
+      "ingredientName": "Milk",
+      "category": "DAIRY",
+      "requestedQty": 4,
+      "unit": "gallon",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DAI-004",
+      "ingredientName": "Salt",
+      "category": "DAIRY",
+      "requestedQty": 5,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 5
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DRY-001",
+      "ingredientName": "All-purpose flour",
+      "category": "DRY GOODS",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DRY-007",
+      "ingredientName": "Baking powder",
+      "category": "DRY GOODS",
+      "requestedQty": 2,
+      "unit": "tsp",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DRY-003",
+      "ingredientName": "Brown Sugar",
+      "category": "DRY GOODS",
+      "requestedQty": 4,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": "DRY-012",
+      "ingredientName": "Corn",
+      "category": "DRY GOODS",
+      "requestedQty": 2,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Active dry yeast",
+      "category": "Unknown",
+      "requestedQty": 5,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 5
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "AP Flour",
+      "category": "Unknown",
+      "requestedQty": 38,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 38
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Apple Cider Vin",
+      "category": "Unknown",
+      "requestedQty": 1,
+      "unit": "qt",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Aspargus",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Bacon",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "#",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Balsamic vin",
+      "category": "Unknown",
+      "requestedQty": 1,
+      "unit": "qt",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Bread flour",
+      "category": "Unknown",
+      "requestedQty": 26,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 26
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Broccoli Crown",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Cake flour",
+      "category": "Unknown",
+      "requestedQty": 6,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 6
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Canola Oil",
+      "category": "Unknown",
+      "requestedQty": 1,
+      "unit": "qt",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Carrots",
+      "category": "Unknown",
+      "requestedQty": 4,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Celery",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "bnch",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Cherry Tomato",
+      "category": "Unknown",
+      "requestedQty": 1,
+      "unit": "pt",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Chicken Brst Hvst",
+      "category": "Unknown",
+      "requestedQty": 8,
+      "unit": "#",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 8
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "chicken stock",
+      "category": "Unknown",
+      "requestedQty": 8,
+      "unit": "qt",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 8
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Dark Corn Syrup",
+      "category": "Unknown",
+      "requestedQty": 12,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 12
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Dk Chocolate Callets",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Dry Mustard pwd",
+      "category": "Unknown",
+      "requestedQty": 4,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Elbow Noodle",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "#",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "EVO",
+      "category": "Unknown",
+      "requestedQty": 1,
+      "unit": "qt",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Fine sea salt",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Garlic Bulb",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Gelatin Sheets",
+      "category": "Unknown",
+      "requestedQty": 10,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 10
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Grn onion",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "bnch",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Honey",
+      "category": "Unknown",
+      "requestedQty": 10,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 10
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Lard",
+      "category": "Unknown",
+      "requestedQty": 8,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 8
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Masa harina",
+      "category": "Unknown",
+      "requestedQty": 4,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Mesquite flour",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Molasses",
+      "category": "Unknown",
+      "requestedQty": 1,
+      "unit": "pint",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 1
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Mozz",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Polenta",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Powder sugar",
+      "category": "Unknown",
+      "requestedQty": 50,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 45
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 5
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Raisin",
+      "category": "Unknown",
+      "requestedQty": 5,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 5
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Raspberry",
+      "category": "Unknown",
+      "requestedQty": 5,
+      "unit": "pt",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 5
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Red Bell",
+      "category": "Unknown",
+      "requestedQty": 4,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Red Potato",
+      "category": "Unknown",
+      "requestedQty": 12,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 12
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Romaine",
+      "category": "Unknown",
+      "requestedQty": 6,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 6
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Shallots",
+      "category": "Unknown",
+      "requestedQty": 11,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 11
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Sourdough culture",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Sunflower kernels",
+      "category": "Unknown",
+      "requestedQty": 2,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 2
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Walnut Pieces",
+      "category": "Unknown",
+      "requestedQty": 5,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 5
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Wh. Chocolate Callets",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "White Sugar",
+      "category": "Unknown",
+      "requestedQty": 12,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 6
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 6
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Whole wheat flour",
+      "category": "Unknown",
+      "requestedQty": 10,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 10
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Yellow cornmeal",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Staff",
+          "course": "CUL168",
+          "qty": 3
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Ylw Onion",
+      "category": "Unknown",
+      "requestedQty": 16,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 16
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Ylw Squash",
+      "category": "Unknown",
+      "requestedQty": 4,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Zucchini",
+      "category": "Unknown",
+      "requestedQty": 4,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 4
+        }
+      ],
+      "shamrockCode": "",
+      "unitPrice": 0
+    }
+  ],
+  "summary": {
+    "totalItems": 58,
+    "itemsWithPricing": 0,
+    "itemsWithoutPricing": 58
+  }
+}

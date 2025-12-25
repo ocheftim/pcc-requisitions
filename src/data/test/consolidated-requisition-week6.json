@@ -1,0 +1,660 @@
+{
+  "weekNumber": 6,
+  "semester": "Fall 2025",
+  "dateCreated": "2025-11-22T09:36:59.677Z",
+  "totalOrders": 4,
+  "orders": [
+    {
+      "instructor": "Mikesell",
+      "course": "CUL168",
+      "day": "Monday",
+      "orderNumber": "VR572W"
+    },
+    {
+      "instructor": "Wong",
+      "course": "CUL140",
+      "day": "Tuesday",
+      "orderNumber": "7ZA2RS"
+    },
+    {
+      "instructor": "McKoy",
+      "course": "CUL260",
+      "day": "Tuesday",
+      "orderNumber": ""
+    },
+    {
+      "instructor": "McKoy",
+      "course": "CUL160",
+      "day": "Wednesday",
+      "orderNumber": ""
+    }
+  ],
+  "items": [
+    {
+      "ingredientId": null,
+      "ingredientName": "Active dry yeast",
+      "category": "BAKING",
+      "requestedQty": 1,
+      "unit": "box",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "G800304",
+      "peddlersPrice": 6.3,
+      "peddlersPackSize": "20/1LB"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Masa harina",
+      "category": "BAKING",
+      "requestedQty": 1,
+      "unit": "bag",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "G400006",
+      "peddlersPrice": 16.2,
+      "peddlersPackSize": "25 LB"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Polenta",
+      "category": "BAKING",
+      "requestedQty": 1,
+      "unit": "bag",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "G810206",
+      "peddlersPrice": 46.4,
+      "peddlersPackSize": "10 LB"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "White Sugar",
+      "category": "BAKING",
+      "requestedQty": 13,
+      "unit": "bag",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 6,
+          "orderNumber": ""
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 6,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "G100002",
+      "peddlersPrice": 22.2,
+      "peddlersPackSize": "25 LB"
+    },
+    {
+      "ingredientId": "DAI-004",
+      "ingredientName": "Butter",
+      "category": "DAIRY",
+      "requestedQty": 7,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 6,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "D460212",
+      "peddlersPrice": 188.2,
+      "peddlersPackSize": "36/1LB"
+    },
+    {
+      "ingredientId": "DAI-009",
+      "ingredientName": "Cheddar",
+      "category": "DAIRY",
+      "requestedQty": 1,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "D475105",
+      "peddlersPrice": 58.9,
+      "peddlersPackSize": "2/5LB"
+    },
+    {
+      "ingredientId": "DAI-006",
+      "ingredientName": "Eggs",
+      "category": "DAIRY",
+      "requestedQty": 15,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 6,
+          "orderNumber": ""
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 8,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "E402000",
+      "peddlersPrice": 50,
+      "peddlersPackSize": "15 DZ"
+    },
+    {
+      "ingredientId": "DAI-002",
+      "ingredientName": "Heavy Cream",
+      "category": "DAIRY",
+      "requestedQty": 19,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 16,
+          "orderNumber": ""
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 2,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "D432202",
+      "peddlersPrice": 106.5,
+      "peddlersPackSize": "9/64 OZ"
+    },
+    {
+      "ingredientId": "DAI-001",
+      "ingredientName": "Milk",
+      "category": "DAIRY",
+      "requestedQty": 6,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 2,
+          "orderNumber": "VR572W"
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 4,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "D431106",
+      "peddlersPrice": 12.5,
+      "peddlersPackSize": "2/1GLN"
+    },
+    {
+      "ingredientId": "DRY-001",
+      "ingredientName": "AP Flour",
+      "category": "DRY GOODS",
+      "requestedQty": 38,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 38,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": "DRY-003",
+      "ingredientName": "Brown Sugar",
+      "category": "DRY GOODS",
+      "requestedQty": 4,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 4,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": "DRY-012",
+      "ingredientName": "Corn",
+      "category": "DRY GOODS",
+      "requestedQty": 1,
+      "unit": "pack",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V200902",
+      "peddlersPrice": 2.7,
+      "peddlersPackSize": "48 CT"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Balsamic vin",
+      "category": "PANTRY",
+      "requestedQty": 1,
+      "unit": "gallon",
+      "orders": [
+        {
+          "instructor": "Mikesell",
+          "course": "CUL168",
+          "qty": 1,
+          "orderNumber": "VR572W"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "G100053",
+      "peddlersPrice": 24.7,
+      "peddlersPackSize": "GALLON"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Broccoli Crown",
+      "category": "PRODUCE",
+      "requestedQty": 1,
+      "unit": "split",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V200600",
+      "peddlersPrice": 13.9,
+      "peddlersPackSize": "20 LBS"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Red Potato",
+      "category": "PRODUCE",
+      "requestedQty": 1,
+      "unit": "bag",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V142102",
+      "peddlersPrice": 7.1,
+      "peddlersPackSize": "5 LB"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Romaine",
+      "category": "PRODUCE",
+      "requestedQty": 6,
+      "unit": "each",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 6,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V120300",
+      "peddlersPrice": 2.5,
+      "peddlersPackSize": "24 CT"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Shallots",
+      "category": "PRODUCE",
+      "requestedQty": 1,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V131000",
+      "peddlersPrice": 16.3,
+      "peddlersPackSize": "5 LBS"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Ylw Squash",
+      "category": "PRODUCE",
+      "requestedQty": 1,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V210201",
+      "peddlersPrice": 10.2,
+      "peddlersPackSize": "5 LBS"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Zucchini",
+      "category": "PRODUCE",
+      "requestedQty": 1,
+      "unit": "case",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 1,
+          "orderNumber": "7ZA2RS"
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "V210601",
+      "peddlersPrice": 7.1,
+      "peddlersPackSize": "5 LBS"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Cake flour",
+      "category": "Unknown",
+      "requestedQty": 6,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 6,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Dark Corn Syrup",
+      "category": "Unknown",
+      "requestedQty": 12,
+      "unit": "oz",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 12,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Dk Chocolate Callets",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 3,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Gelatin Sheets",
+      "category": "Unknown",
+      "requestedQty": 10,
+      "unit": "ea",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 10,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Powder sugar",
+      "category": "Unknown",
+      "requestedQty": 50,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 5,
+          "orderNumber": ""
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 45,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Raisin",
+      "category": "Unknown",
+      "requestedQty": 5,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 5,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Raspberry",
+      "category": "Unknown",
+      "requestedQty": 10,
+      "unit": "each",
+      "orders": [
+        {
+          "instructor": "Wong",
+          "course": "CUL140",
+          "qty": 5,
+          "orderNumber": "7ZA2RS"
+        },
+        {
+          "instructor": "McKoy",
+          "course": "CUL260",
+          "qty": 5,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "F320400",
+      "peddlersPrice": 4.8,
+      "peddlersPackSize": "12 CT CASE"
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Walnut Pieces",
+      "category": "Unknown",
+      "requestedQty": 5,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 5,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    },
+    {
+      "ingredientId": null,
+      "ingredientName": "Wh. Chocolate Callets",
+      "category": "Unknown",
+      "requestedQty": 3,
+      "unit": "lb",
+      "orders": [
+        {
+          "instructor": "McKoy",
+          "course": "CUL160",
+          "qty": 3,
+          "orderNumber": ""
+        }
+      ],
+      "shamrockCode": "",
+      "shamrockPrice": 0,
+      "peddlersCode": "",
+      "peddlersPrice": 0,
+      "peddlersPackSize": ""
+    }
+  ],
+  "summary": {
+    "totalItems": 28,
+    "itemsWithPricing": 18,
+    "itemsWithoutPricing": 10,
+    "peddlersItems": 18
+  }
+}

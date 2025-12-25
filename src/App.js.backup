@@ -1,0 +1,44 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navigation from './components/Navigation';
+import InstructorRequisitionPage from './pages/requisitions/InstructorRequisitionPage';
+import MyRequisitionsPage from './pages/requisitions/MyRequisitionsPage';
+import ConsolidatedOrderingPage from './pages/requisitions/ConsolidatedOrderingPage';
+import IngredientsPage from './pages/requisitions/IngredientsPage';
+import SettingsPage from './pages/requisitions/SettingsPage';
+import PullListPage from './pages/requisitions/PullListPage';
+import DashboardPage from './pages/requisitions/DashboardPage';
+import MenuPage from './pages/requisitions/MenuPage';
+import PublicMenuPage from './pages/requisitions/PublicMenuPage';
+import AdminProtect from './components/AdminProtect';
+import { InventoryDashboard, InventoryCountPage, InventoryLocationsPage, InventoryExpiringPage, InventoryHistoryPage } from './pages/inventory';
+
+function App() {
+  return (
+    <Router>
+      <div className="min-h-screen bg-gray-100">
+        <Navigation />
+        <Routes>
+          <Route path="/" element={<AdminProtect><DashboardPage /></AdminProtect>} />
+          <Route path="/dashboard" element={<AdminProtect><DashboardPage /></AdminProtect>} />
+          <Route path="/create" element={<AdminProtect><InstructorRequisitionPage /></AdminProtect>} />
+          <Route path="/requisitions" element={<AdminProtect><MyRequisitionsPage /></AdminProtect>} />
+          <Route path="/consolidated" element={<AdminProtect><ConsolidatedOrderingPage /></AdminProtect>} />
+          <Route path="/ingredients" element={<AdminProtect><IngredientsPage /></AdminProtect>} />
+          <Route path="/menu" element={<AdminProtect><MenuPage /></AdminProtect>} />
+          <Route path="/settings" element={<AdminProtect><SettingsPage /></AdminProtect>} />
+          <Route path="/pull-list" element={<AdminProtect><PullListPage /></AdminProtect>} />
+          <Route path="/inventory" element={<AdminProtect><InventoryDashboard /></AdminProtect>} />
+          <Route path="/inventory/count" element={<AdminProtect><InventoryCountPage /></AdminProtect>} />
+          <Route path="/inventory/locations" element={<AdminProtect><InventoryLocationsPage /></AdminProtect>} />
+          <Route path="/inventory/expiring" element={<AdminProtect><InventoryExpiringPage /></AdminProtect>} />
+          <Route path="/inventory/history" element={<AdminProtect><InventoryHistoryPage /></AdminProtect>} />
+          <Route path="/instructor" element={<InstructorRequisitionPage hideNav={true} />} />
+          <Route path="/public-menu" element={<PublicMenuPage />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;

@@ -1,0 +1,171 @@
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import InstructorRequisitionPage from './pages/requisitions/InstructorRequisitionPage';
+import MyRequisitionsPage from './pages/requisitions/MyRequisitionsPage';
+import ConsolidatedOrderingPage from './pages/requisitions/ConsolidatedOrderingPage';
+import IngredientsPage from './pages/requisitions/IngredientsPage';
+import SettingsPage from './pages/requisitions/SettingsPage';
+import CateringWorkflowSystem from './pages/requisitions/CateringWorkflowSystem';
+import StandardizedRecipePage from './pages/requisitions/StandardizedRecipePage';
+import PullListPage from "./pages/requisitions/PullListPage";
+import PrintRequisitionPage from "./pages/requisitions/PrintRequisitionPage";
+
+function Navigation() {
+  const [reqDropdownOpen, setReqDropdownOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleReqNav = (path) => {
+    navigate(path);
+    setReqDropdownOpen(false);
+  };
+
+  return (
+    <nav className="bg-white shadow-lg border-b">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="py-4 flex items-center gap-4 border-b">
+          <img src="/pcc-logo.png" alt="PCC" className="h-12" />
+          <div className="border-l-4 border-blue-600 pl-4">
+            <span className="font-bold text-lg leading-tight block">Lab Requisition</span>
+            <span className="text-xs text-gray-600 leading-tight">Culinary Arts and Baking & Pastry Arts</span>
+          </div>
+        </div>
+        <div className="flex space-x-1 py-2">
+          <div className="relative">
+            <button
+              onClick={() => setReqDropdownOpen(!reqDropdownOpen)}
+              onBlur={() => setTimeout(() => setReqDropdownOpen(false), 150)}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-1 ${
+                window.location.pathname.includes('/requisitions') || window.location.pathname === '/create' || window.location.pathname === '/'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-blue-800 hover:bg-blue-100'
+              }`}
+            >
+              Requisitions
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {reqDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-48">
+                <button
+                  onClick={() => handleReqNav('/create')}
+                  className="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700 hover:text-blue-800 rounded-t-lg"
+                >
+                  ➕ Create New
+                </button>
+                <button
+                  onClick={() => handleReqNav('/requisitions/pending')}
+                  className="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700 hover:text-blue-800"
+                >
+                  📝 Pending
+                </button>
+                <button
+                  onClick={() => handleReqNav('/requisitions/archived')}
+                  className="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700 hover:text-blue-800 rounded-b-lg"
+                >
+                  📁 Archived
+                </button>
+                <button
+                  onClick={() => handleReqNav("/pull-list")}
+                  className="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700 hover:text-blue-800 rounded-b-lg"
+                >
+                  📋 Pull List
+                </button>
+              </div>
+            )}
+          </div>
+          
+          <NavLink
+            to="/consolidated"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
+              }`
+            }
+          >
+            Consolidated
+          </NavLink>
+          
+          <NavLink
+            to="/ingredients"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
+              }`
+            }
+          >
+            Ingredients
+          </NavLink>
+          
+          <NavLink
+            to="/recipes"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
+              }`
+            }
+          >
+            Recipes
+          </NavLink>
+          
+          <NavLink
+            to="/catering"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
+              }`
+            }
+          >
+            Catering
+          </NavLink>
+          
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
+              }`
+            }
+          >
+            Settings
+          </NavLink>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function NavigationWrapper() {
+  const location = window.location.pathname;
+  if (location === "/instructor") return null;
+  return <Navigation />;
+}
+
+function App() {
+  return (
+    <Router>
+      <div className="min-h-screen bg-gray-100">
+        <NavigationWrapper />
+        <Routes>
+          <Route path="/" element={<InstructorRequisitionPage />} />
+          <Route path="/create" element={<InstructorRequisitionPage />} />
+          <Route path="/requisitions" element={<MyRequisitionsPage />} />
+          <Route path="/requisitions/pending" element={<MyRequisitionsPage initialFilter="pending" />} />
+          <Route path="/requisitions/archived" element={<MyRequisitionsPage initialFilter="archived" />} />
+          <Route path="/requisitions/my-orders" element={<MyRequisitionsPage />} />
+          <Route path="/requisitions/create" element={<InstructorRequisitionPage />} />
+          <Route path="/consolidated" element={<ConsolidatedOrderingPage />} />
+          <Route path="/pull-list" element={<PullListPage />} />
+          <Route path="/ingredients" element={<IngredientsPage />} />
+          <Route path="/requisitions/print" element={<PrintRequisitionPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/catering" element={<CateringWorkflowSystem />} />
+          <Route path="/recipes" element={<StandardizedRecipePage />} />
+          <Route path="/instructor" element={<InstructorRequisitionPage hideNav={true} />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;

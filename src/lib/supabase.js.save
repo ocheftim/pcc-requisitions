@@ -1,0 +1,196 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://xoswclwjsmwpemcrvorp.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhvc3djbHdqc213cGVtY3J2b3JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MTQ1NzQsImV4cCI6MjA3OTk5MDU3NH0.JexQn0yFDURVI-g5ILj9Dfj7LHAQyV34clLDA2Uw1eE';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Requisition functions
+export const saveRequisition = async (requisition) => {
+  const { data, error } = await supabase
+    .from('requisitions')
+    .insert([requisition])
+    .select();
+  if (error) throw error;
+  return data[0];
+};
+
+export const getRequisitions = async () => {
+  const { data, error } = await supabase
+    .from('requisitions')
+    .select('*')
+    .order('class_date', { ascending: true });
+  if (error) throw error;
+  return data;
+};
+
+export const updateRequisition = async (id, updates) => {
+  const { data, error } = await supabase
+    .from('requisitions')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select();
+  if (error) throw error;
+  return data[0];
+};
+
+export const deleteRequisition = async (id) => {
+  const { error } = await supabase
+    .from('requisitions')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
+// Settings functions
+export const getSetting = async (key) => {
+  const { data, error } = await supabase
+    .from('settings')
+    .select('value')
+    .eq('key', key)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data?.value || null;
+};
+
+export const saveSetting = async (key, value) => {
+  const { data, error } = await supabase
+    .from('settings')
+    .upsert([{ key, value, updated_at: new Date().toISOString() }], { onConflict: 'key' })
+    .select();
+  if (error) throw error;
+  return data[0];
+};
+
+// Ingredient customization functions (uses JSONB customizations column)
+export const getIngredientCustomizations = async () => {
+  const { data, error } = await supabase
+    .from('ingredient_customizations')
+    .select('*');
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveIngredientCustomization = async (ingredientId, updates, isCustom = false) => {
+  const { data: existing } = await supabase
+    .from('ingredient_customizations')
+    .select('customizations')
+    .eq('ingredient_id', ingredientId)
+    .single();
+  
+  const currentCustomizations = existing?.customizations || {};
+  const mergedCustomizations = { ...currentCustomizations, ...updates, updated_at: new Date().toISOString() };
+  
+  const { data, error } = await supabase
+    .from('ingredient_customizations')
+    .upsert([{ 
+      ingredient_id: ingredientId, 
+      is_custom: isCustom,
+      customizations: mergedCustomizations,
+      updated_at: new Date().toISOString()
+    }], { onConflict: 'ingredient_id' })
+    .select();
+  if (error) throw error;
+  return data[0];
+};
+
+export const deleteIngredientDB = async (ingredientId) => {
+  return saveIngredientCustomization(ingredientId, { deleted: true });
+};
+
+export const restoreIngredientDB = async (ingredientId) => {
+  return saveIngredientCustomization(ingredientId, { deleted: false });
+};
+
+export const setInstructorVisibility = async (ingredientId, hidden) => {
+  const { data, error } = await supabase
+    .from('ingredients')
+    .update({ hidden_from_instructor: hidden })
+    .eq('id', ingredientId)
+    .select();
+  if (error) throw error;
+  return data[0];
+};
+
+export const bulkSetInstructorVisibility = async (ingredientIds, hidden) => {
+  const promises = ingredientIds.map(id => setInstructorVisibility(id, hidden));
+  return Promise.all(promises);
+};
+
+// Fetch all ingredients from Supabase
+export async function getIngredients() {
+  const { data, error } = await supabase
+    .from('ingredients')
+    .select('*')
+    .eq('is_active', true)
+    .order('name');
+  
+  if (error) {
+    console.error('Error fetching ingredients:', error);
+    return [];
+  }
+  
+  // Map snake_case to camelCase for app compatibility
+  return data.map(ing => ({
+    id: ing.id,
+    name: ing.name,
+    category: ing.category,
+    subcategory: ing.subcategory,
+    unit: ing.unit,
+    vendor: ing.vendor,
+    vendorCode: ing.vendor_code,
+    syscoCode: ing.vendor_code,
+    packSize: ing.pack_size,
+    syscoPackSize: ing.pack_size,
+    casePrice: parseFloat(ing.case_price) || 0,
+    syscoPrice: parseFloat(ing.case_price) || 0,
+    brand: ing.brand,
+    programs: ing.programs,
+    storage: ing.storage,
+    hiddenFromInstructor: ing.hidden_from_instructor
+  }));
+}
+
+// Save/update ingredient in Supabase
+export async function saveIngredient(ingredient) {
+  const { data, error } = await supabase
+    .from('ingredients')
+    .upsert({
+      id: ingredient.id,
+      name: ingredient.name,
+      category: ingredient.category,
+      subcategory: ingredient.subcategory,
+      unit: ingredient.unit,
+      vendor: ingredient.vendor,
+      vendor_code: ingredient.vendorCode || ingredient.syscoCode,
+      pack_size: ingredient.packSize || ingredient.syscoPackSize,
+      case_price: ingredient.casePrice || ingredient.syscoPrice || 0,
+      brand: ingredient.brand,
+      programs: ingredient.programs,
+      storage: ingredient.storage,
+      hidden_from_instructor: ingredient.hiddenFromInstructor || false,
+      is_active: true,
+      updated_at: new Date().toISOString()
+    })
+    .select();
+  
+  if (error) {
+    console.error('Error saving ingredient:', error);
+    return null;
+  }
+  return data[0];
+}
+
+// Delete ingredient (soft delete)
+export async function deleteIngredient(id) {
+  const { error } = await supabase
+    .from('ingredients')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  
+  if (error) {
+    console.error('Error deleting ingredient:', error);
+    return false;
+  }
+  return true;
+}

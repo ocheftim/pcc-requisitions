@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>PCC Vendor Comparison</title>
+<style>
+body{font-family:Arial,sans-serif;margin:20px;background:#f5f5f5}
+.header{background:white;padding:20px;border-bottom:3px solid #2563eb;margin-bottom:20px}
+h1{color:#2563eb;margin:0}
+table{width:100%;background:white;border-collapse:collapse;box-shadow:0 2px 4px rgba(0,0,0,0.1)}
+th{background:#2563eb;color:white;padding:12px;text-align:left}
+td{padding:12px;border-bottom:1px solid #eee}
+tr:hover{background:#f9f9f9}
+.best{background:#d1fae5;font-weight:bold;padding:5px;border-radius:4px}
+.vendor{padding:5px;margin:3px 0;background:#fef3c7;border-radius:4px}
+button{background:#2563eb;color:white;border:none;padding:10px 20px;cursor:pointer;border-radius:4px}
+button:hover{background:#1d4ed8}
+</style></head><body>
+<div class="header"><h1>PCC Multi-Vendor Comparison</h1><p>Real Pricing: Sysco • Shamrock • Peddler's</p></div>
+<div style="margin-bottom:20px"><button onclick="exportCSV()">Export to CSV</button></div>
+<table id="dataTable"><thead><tr><th>PCC #</th><th>Product</th><th>Category</th><th>Vendor Pricing</th></tr></thead>
+<tbody id="tbody"></tbody></table>
+
+<script type="module">
+import{ingredientDatabase,getBestPrice,comparePrices}from'./vendorData.js';
+const tbody=document.getElementById('tbody');
+ingredientDatabase.forEach(item=>{
+  const best=getBestPrice(item);
+  const comp=comparePrices(item.id);
+  const pricing=comp.map(v=>{
+    const isBest=v.vendor===best.vendor;
+    return`<div class="${isBest?'best':'vendor'}"><strong>${v.vendor.toUpperCase()}</strong>: $${v.price.toFixed(2)}/${item.unit} - ${v.code}</div>`;
+  }).join('');
+  tbody.innerHTML+=`<tr><td>${item.pccStockNumber}</td><td>${item.productName}</td><td>${item.category}</td><td>${pricing}</td></tr>`;
+});
+
+window.exportCSV=()=>{
+  let csv='PCC,Product,Category,Unit,Sysco Code,Sysco Price,Shamrock Code,Shamrock Price,Best\n';
+  ingredientDatabase.forEach(i=>{
+    const b=getBestPrice(i);
+    csv+=`"${i.pccStockNumber}","${i.productName}","${i.category}","${i.unit}",`;
+    csv+=`"${i.vendors.sysco.code||'N/A'}","${i.vendors.sysco.price||'N/A'}",`;
+    csv+=`"${i.vendors.shamrock.code||'N/A'}","${i.vendors.shamrock.price||'N/A'}","${b.vendor}"\n`;
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='vendor-pricing.csv';
+  a.click();
+};
+</script></body></html>
