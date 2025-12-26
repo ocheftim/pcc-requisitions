@@ -30,10 +30,13 @@ export default function RecipeSelector({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddRecipe, setShowAddRecipe] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   useEffect(() => {
     if (!courseCode) {
       setAvailableRecipes([]);
+      setCategories([]);
       return;
     }
 
@@ -45,10 +48,15 @@ export default function RecipeSelector({
           .select('id, name, yield_amount, yield_unit, ingredients, category')
           .eq('course', courseCode)
           .eq('active', true)
+          .order('category')
           .order('name');
 
         if (error) throw error;
         setAvailableRecipes(data || []);
+        
+        // Extract unique categories
+        const uniqueCategories = [...new Set((data || []).map(r => r.category).filter(Boolean))];
+        setCategories(uniqueCategories.sort());
       } catch (err) {
         console.error('Error fetching recipes:', err);
       } finally {
@@ -74,14 +82,13 @@ export default function RecipeSelector({
       yield_amount: recipe.yield_amount || 1,
       yield_unit: recipe.yield_unit || 'batch',
       ingredients: recipe.ingredients || [],
+      category: recipe.category,
       scale_factor: 1,
       production_method: 'pairs',
       num_batches: calculateBatches('pairs', studentCount)
     };
     
     setSelectedRecipes(prev => [...prev, newRecipe]);
-    setShowAddRecipe(false);
-    setSearchTerm('');
   };
 
   const removeRecipe = (recipeId) => {
@@ -146,9 +153,11 @@ export default function RecipeSelector({
     }
   }, [aggregatedIngredients, selectedRecipes, onIngredientsChange, onRecipesChange]);
 
+  // Filter by category AND search term
   const filteredAvailable = availableRecipes.filter(r => 
     !selectedRecipes.find(s => s.id === r.id) &&
-    r.name.toLowerCase().includes(searchTerm.toLowerCase())
+    r.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (selectedCategory === '' || r.category === selectedCategory)
   );
 
   if (!courseCode) {
@@ -174,20 +183,31 @@ export default function RecipeSelector({
           onClick={() => setShowAddRecipe(!showAddRecipe)}
           className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
         >
-          <span>+</span> Add Recipe
+          {showAddRecipe ? '✕ Close' : '+ Add Recipe'}
         </button>
       </div>
 
       {showAddRecipe && (
         <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <input
-            type="text"
-            placeholder="Search recipes..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
+          <div className="flex gap-2 mb-2">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+            >
+              <option value="">All Categories</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Search recipes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
           {loading ? (
             <div className="text-gray-500 text-center py-2">Loading recipes...</div>
           ) : filteredAvailable.length === 0 ? (
@@ -204,9 +224,16 @@ export default function RecipeSelector({
                   onClick={() => addRecipe(recipe)}
                   className="w-full text-left px-3 py-2 hover:bg-blue-100 rounded flex justify-between items-center"
                 >
-                  <span>{recipe.name}</span>
+                  <div>
+                    <span className="font-medium">{recipe.name}</span>
+                    {recipe.category && (
+                      <span className="ml-2 text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
+                        {recipe.category}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-gray-500">
-                    {recipe.ingredients?.length || 0} ingredients
+                    {recipe.ingredients?.length || 0} items
                   </span>
                 </button>
               ))}
@@ -237,6 +264,7 @@ export default function RecipeSelector({
                   <td className="px-3 py-2">
                     <div className="font-medium text-gray-800">{recipe.name}</div>
                     <div className="text-xs text-gray-500">
+                      {recipe.category && <span className="mr-2">{recipe.category}</span>}
                       {recipe.yield_amount} {recipe.yield_unit} • {recipe.ingredients?.length || 0} items
                     </div>
                   </td>
@@ -305,16 +333,6 @@ export default function RecipeSelector({
           </div>
         </div>
       )}
-
-      <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded">
-        <strong>How it works:</strong> Select recipes, then set scale and production method for each.
-        <ul className="mt-1 ml-4 list-disc">
-          <li><strong>Scale</strong>: Recipe multiplier (e.g., ½x = half batch)</li>
-          <li><strong>Demo</strong>: 1 batch total (instructor demonstration)</li>
-          <li><strong>Pairs/Groups</strong>: Batches = Students ÷ Group Size</li>
-          <li>Ingredients auto-calculate based on scale × batches</li>
-        </ul>
-      </div>
     </div>
   );
 }
