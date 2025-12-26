@@ -23,7 +23,7 @@ export default function RecipeSelector({
   studentCount = 14,
   onIngredientsChange,
   onRecipesChange,
-  initialRecipeNames = '',  // Comma-separated recipe names from requisition
+  moduleNumber = null,
   initialRecipes = []
 }) {
   const [availableRecipes, setAvailableRecipes] = useState([]);
@@ -31,76 +31,50 @@ export default function RecipeSelector({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddRecipe, setShowAddRecipe] = useState(false);
-  const [autoLoaded, setAutoLoaded] = useState(false);
 
-  // Fetch recipes when course changes
+  // Fetch recipes filtered by course AND module
   useEffect(() => {
     if (!courseCode) {
       setAvailableRecipes([]);
+      setSelectedRecipes([]);
       return;
     }
 
     const fetchRecipes = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('recipes')
-          .select('id, name, yield_amount, yield_unit, ingredients, category')
+          .select('id, name, yield_amount, yield_unit, ingredients, category, module')
           .eq('course', courseCode)
-          .eq('active', true)
-          .order('name');
+          .eq('active', true);
+        
+        // Filter by module if provided
+        if (moduleNumber) {
+          query = query.eq('module', moduleNumber);
+        }
+        
+        const { data, error } = await query.order('name');
 
         if (error) throw error;
-        setAvailableRecipes(data || []);
         
-        // Auto-match recipes from initialRecipeNames
-        if (data && initialRecipeNames && !autoLoaded) {
-          const recipeNames = initialRecipeNames.split(',').map(n => n.trim().toLowerCase());
-          const matched = [];
-          
-          recipeNames.forEach(name => {
-            if (!name) return;
-            // Find best match
-            const exactMatch = data.find(r => r.name.toLowerCase() === name);
-            if (exactMatch) {
-              matched.push({
-                id: exactMatch.id,
-                name: exactMatch.name,
-                yield_amount: exactMatch.yield_amount || 1,
-                yield_unit: exactMatch.yield_unit || 'batch',
-                ingredients: exactMatch.ingredients || [],
-                category: exactMatch.category,
-                scale_factor: 1,
-                production_method: 'pairs',
-                num_batches: calculateBatches('pairs', studentCount)
-              });
-            } else {
-              // Try partial match
-              const partialMatch = data.find(r => 
-                r.name.toLowerCase().includes(name) || 
-                name.includes(r.name.toLowerCase())
-              );
-              if (partialMatch && !matched.find(m => m.id === partialMatch.id)) {
-                matched.push({
-                  id: partialMatch.id,
-                  name: partialMatch.name,
-                  yield_amount: partialMatch.yield_amount || 1,
-                  yield_unit: partialMatch.yield_unit || 'batch',
-                  ingredients: partialMatch.ingredients || [],
-                  category: partialMatch.category,
-                  scale_factor: 1,
-                  production_method: 'pairs',
-                  num_batches: calculateBatches('pairs', studentCount)
-                });
-              }
-            }
-          });
-          
-          if (matched.length > 0) {
-            setSelectedRecipes(matched);
-            setAutoLoaded(true);
-          }
+        // Auto-select ALL recipes for this module (idiot-proof)
+        if (data && data.length > 0 && moduleNumber) {
+          const autoSelected = data.map(recipe => ({
+            id: recipe.id,
+            name: recipe.name,
+            yield_amount: recipe.yield_amount || 1,
+            yield_unit: recipe.yield_unit || 'batch',
+            ingredients: recipe.ingredients || [],
+            category: recipe.category,
+            scale_factor: 1,
+            production_method: 'demo', // Default to demo
+            num_batches: 1
+          }));
+          setSelectedRecipes(autoSelected);
         }
+        
+        setAvailableRecipes(data || []);
       } catch (err) {
         console.error('Error fetching recipes:', err);
       } finally {
@@ -109,7 +83,7 @@ export default function RecipeSelector({
     };
 
     fetchRecipes();
-  }, [courseCode, initialRecipeNames, autoLoaded, studentCount]);
+  }, [courseCode, moduleNumber]);
 
   const calculateBatches = (method, students) => {
     const methodConfig = PRODUCTION_METHODS.find(m => m.id === method);
@@ -200,7 +174,7 @@ export default function RecipeSelector({
     if (onRecipesChange) {
       onRecipesChange(selectedRecipes);
     }
-  }, [aggregatedIngredients, selectedRecipes, onIngredientsChange, onRecipesChange]);
+  }, [aggregatedIngredients, selectedRecipes]);
 
   // Filter available recipes
   const filteredAvailable = availableRecipes.filter(r => 
@@ -220,23 +194,25 @@ export default function RecipeSelector({
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-blue-800">
-          Lab Recipes
+          Lab Recipes {moduleNumber && <span className="text-sm font-normal text-gray-500">(Module {moduleNumber})</span>}
           {selectedRecipes.length > 0 && (
             <span className="ml-2 text-sm font-normal text-gray-500">
-              ({selectedRecipes.length} selected)
+              - {selectedRecipes.length} recipe{selectedRecipes.length > 1 ? 's' : ''}
             </span>
           )}
         </h3>
-        <button
-          onClick={() => setShowAddRecipe(!showAddRecipe)}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
-        >
-          {showAddRecipe ? '✕ Close' : '+ Add Recipe'}
-        </button>
+        {!moduleNumber && (
+          <button
+            onClick={() => setShowAddRecipe(!showAddRecipe)}
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
+          >
+            {showAddRecipe ? '✕ Close' : '+ Add Recipe'}
+          </button>
+        )}
       </div>
 
-      {/* Add Recipe Panel */}
-      {showAddRecipe && (
+      {/* Add Recipe Panel - only show if no module filter */}
+      {showAddRecipe && !moduleNumber && (
         <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <input
             type="text"
@@ -283,7 +259,7 @@ export default function RecipeSelector({
       {/* Selected Recipes Table */}
       {selectedRecipes.length === 0 ? (
         <div className="text-gray-500 text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
-          {loading ? 'Loading recipes...' : 'No recipes matched. Click "Add Recipe" to add manually.'}
+          {loading ? 'Loading recipes...' : moduleNumber ? 'No recipes assigned to this module' : 'No recipes selected'}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -294,7 +270,7 @@ export default function RecipeSelector({
                 <th className="text-center px-3 py-2 font-medium text-gray-600 w-24">Scale</th>
                 <th className="text-center px-3 py-2 font-medium text-gray-600 w-32">Method</th>
                 <th className="text-center px-3 py-2 font-medium text-gray-600 w-20">Batches</th>
-                <th className="text-center px-3 py-2 font-medium text-gray-600 w-16"></th>
+                {!moduleNumber && <th className="text-center px-3 py-2 font-medium text-gray-600 w-16"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -331,15 +307,17 @@ export default function RecipeSelector({
                   <td className="px-3 py-2 text-center font-medium text-blue-600">
                     {recipe.num_batches}
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    <button
-                      onClick={() => removeRecipe(recipe.id)}
-                      className="text-red-500 hover:text-red-700 text-lg"
-                      title="Remove recipe"
-                    >
-                      ×
-                    </button>
-                  </td>
+                  {!moduleNumber && (
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        onClick={() => removeRecipe(recipe.id)}
+                        className="text-red-500 hover:text-red-700 text-lg"
+                        title="Remove recipe"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -13,6 +13,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
   const [selectedClass, setSelectedClass] = useState('');
   const [recipes, setRecipes] = useState('');
   const [labRecipes, setLabRecipes] = useState([]);
+  const [reqModule, setReqModule] = useState(null);
   const [orderItems, setOrderItems] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [customItemName, setCustomItemName] = useState('');
@@ -62,6 +63,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           setRecipes(data.recipes || "");
           setStudentCount(data.students || 12);
           setNotes(data.notes || "");
+          setReqModule(data.module || null);
           const items = {};
           (data.items || []).forEach(item => {
             const itemId = item.id || `item-${item.name}`;
@@ -182,6 +184,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           setRecipes(data.recipes || "");
           setStudentCount(data.students || 12);
           setNotes(data.notes || "");
+          setReqModule(data.module || null);
           const items = {};
           (data.items || []).forEach(item => {
             const itemId = item.id || `item-${item.name}`;
@@ -653,6 +656,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           <RecipeSelector
             courseCode={selectedClass}
             initialRecipeNames={recipes}
+            moduleNumber={reqModule}
             studentCount={studentCount}
             onIngredientsChange={(ingredients) => {
               const newItems = {};
