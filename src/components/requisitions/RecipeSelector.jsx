@@ -23,6 +23,7 @@ export default function RecipeSelector({
   studentCount = 14,
   onIngredientsChange,
   onRecipesChange,
+  initialRecipeNames = '',  // Comma-separated recipe names from requisition
   initialRecipes = []
 }) {
   const [availableRecipes, setAvailableRecipes] = useState([]);
@@ -30,13 +31,12 @@ export default function RecipeSelector({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddRecipe, setShowAddRecipe] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [autoLoaded, setAutoLoaded] = useState(false);
 
+  // Fetch recipes when course changes
   useEffect(() => {
     if (!courseCode) {
       setAvailableRecipes([]);
-      setCategories([]);
       return;
     }
 
@@ -48,15 +48,59 @@ export default function RecipeSelector({
           .select('id, name, yield_amount, yield_unit, ingredients, category')
           .eq('course', courseCode)
           .eq('active', true)
-          .order('category')
           .order('name');
 
         if (error) throw error;
         setAvailableRecipes(data || []);
         
-        // Extract unique categories
-        const uniqueCategories = [...new Set((data || []).map(r => r.category).filter(Boolean))];
-        setCategories(uniqueCategories.sort());
+        // Auto-match recipes from initialRecipeNames
+        if (data && initialRecipeNames && !autoLoaded) {
+          const recipeNames = initialRecipeNames.split(',').map(n => n.trim().toLowerCase());
+          const matched = [];
+          
+          recipeNames.forEach(name => {
+            if (!name) return;
+            // Find best match
+            const exactMatch = data.find(r => r.name.toLowerCase() === name);
+            if (exactMatch) {
+              matched.push({
+                id: exactMatch.id,
+                name: exactMatch.name,
+                yield_amount: exactMatch.yield_amount || 1,
+                yield_unit: exactMatch.yield_unit || 'batch',
+                ingredients: exactMatch.ingredients || [],
+                category: exactMatch.category,
+                scale_factor: 1,
+                production_method: 'pairs',
+                num_batches: calculateBatches('pairs', studentCount)
+              });
+            } else {
+              // Try partial match
+              const partialMatch = data.find(r => 
+                r.name.toLowerCase().includes(name) || 
+                name.includes(r.name.toLowerCase())
+              );
+              if (partialMatch && !matched.find(m => m.id === partialMatch.id)) {
+                matched.push({
+                  id: partialMatch.id,
+                  name: partialMatch.name,
+                  yield_amount: partialMatch.yield_amount || 1,
+                  yield_unit: partialMatch.yield_unit || 'batch',
+                  ingredients: partialMatch.ingredients || [],
+                  category: partialMatch.category,
+                  scale_factor: 1,
+                  production_method: 'pairs',
+                  num_batches: calculateBatches('pairs', studentCount)
+                });
+              }
+            }
+          });
+          
+          if (matched.length > 0) {
+            setSelectedRecipes(matched);
+            setAutoLoaded(true);
+          }
+        }
       } catch (err) {
         console.error('Error fetching recipes:', err);
       } finally {
@@ -65,7 +109,7 @@ export default function RecipeSelector({
     };
 
     fetchRecipes();
-  }, [courseCode]);
+  }, [courseCode, initialRecipeNames, autoLoaded, studentCount]);
 
   const calculateBatches = (method, students) => {
     const methodConfig = PRODUCTION_METHODS.find(m => m.id === method);
@@ -109,13 +153,17 @@ export default function RecipeSelector({
     }));
   };
 
+  // Recalculate batches when student count changes
   useEffect(() => {
-    setSelectedRecipes(prev => prev.map(recipe => ({
-      ...recipe,
-      num_batches: calculateBatches(recipe.production_method, studentCount)
-    })));
+    if (selectedRecipes.length > 0) {
+      setSelectedRecipes(prev => prev.map(recipe => ({
+        ...recipe,
+        num_batches: calculateBatches(recipe.production_method, studentCount)
+      })));
+    }
   }, [studentCount]);
 
+  // Aggregate ingredients
   const aggregatedIngredients = useMemo(() => {
     const ingredientMap = new Map();
 
@@ -144,6 +192,7 @@ export default function RecipeSelector({
     return Array.from(ingredientMap.values());
   }, [selectedRecipes]);
 
+  // Notify parent of changes
   useEffect(() => {
     if (onIngredientsChange) {
       onIngredientsChange(aggregatedIngredients);
@@ -153,11 +202,10 @@ export default function RecipeSelector({
     }
   }, [aggregatedIngredients, selectedRecipes, onIngredientsChange, onRecipesChange]);
 
-  // Filter by category AND search term
+  // Filter available recipes
   const filteredAvailable = availableRecipes.filter(r => 
     !selectedRecipes.find(s => s.id === r.id) &&
-    r.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (selectedCategory === '' || r.category === selectedCategory)
+    r.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (!courseCode) {
@@ -187,27 +235,17 @@ export default function RecipeSelector({
         </button>
       </div>
 
+      {/* Add Recipe Panel */}
       {showAddRecipe && (
         <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex gap-2 mb-2">
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-            >
-              <option value="">All Categories</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Search recipes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          <input
+            type="text"
+            placeholder="Search recipes..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500"
+            autoFocus
+          />
           {loading ? (
             <div className="text-gray-500 text-center py-2">Loading recipes...</div>
           ) : filteredAvailable.length === 0 ? (
@@ -242,9 +280,10 @@ export default function RecipeSelector({
         </div>
       )}
 
+      {/* Selected Recipes Table */}
       {selectedRecipes.length === 0 ? (
         <div className="text-gray-500 text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
-          No recipes selected. Click "Add Recipe" to get started.
+          {loading ? 'Loading recipes...' : 'No recipes matched. Click "Add Recipe" to add manually.'}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -264,8 +303,7 @@ export default function RecipeSelector({
                   <td className="px-3 py-2">
                     <div className="font-medium text-gray-800">{recipe.name}</div>
                     <div className="text-xs text-gray-500">
-                      {recipe.category && <span className="mr-2">{recipe.category}</span>}
-                      {recipe.yield_amount} {recipe.yield_unit} • {recipe.ingredients?.length || 0} items
+                      {recipe.ingredients?.length || 0} ingredients
                     </div>
                   </td>
                   <td className="px-3 py-2">
@@ -309,13 +347,12 @@ export default function RecipeSelector({
         </div>
       )}
 
+      {/* Ingredients Summary */}
       {aggregatedIngredients.length > 0 && (
         <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-medium text-green-800">
-              Calculated Ingredients ({aggregatedIngredients.length} items)
-            </h4>
-          </div>
+          <h4 className="font-medium text-green-800 mb-2">
+            Calculated Ingredients ({aggregatedIngredients.length} items)
+          </h4>
           <div className="text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto">
             {aggregatedIngredients.slice(0, 10).map((ing, idx) => (
               <div key={idx} className="flex justify-between">

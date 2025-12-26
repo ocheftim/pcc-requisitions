@@ -652,6 +652,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
         <div className="mb-6">
           <RecipeSelector
             courseCode={selectedClass}
+            initialRecipeNames={recipes}
             studentCount={studentCount}
             onIngredientsChange={(ingredients) => {
               const newItems = {};
