@@ -22,7 +22,7 @@ export default function MyRequisitionsPage({ initialFilter = null }) {
     'Kouchit'
   ];
 
-  useEffect(() => { loadRequisitions(); }, []);
+  useEffect(() => { loadRequisitions(); }, [initialFilter]);
 
   const loadRequisitions = async () => {
     try {
