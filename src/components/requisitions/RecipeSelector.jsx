@@ -23,6 +23,7 @@ export default function RecipeSelector({
   studentCount = 14,
   onIngredientsChange,
   onRecipesChange,
+  onApplyIngredients,
   moduleNumber = null,
   initialRecipes = []
 }) {
@@ -49,7 +50,6 @@ export default function RecipeSelector({
           .eq('course', courseCode)
           .eq('active', true);
         
-        // Filter by module if provided
         if (moduleNumber) {
           query = query.eq('module', moduleNumber);
         }
@@ -58,7 +58,6 @@ export default function RecipeSelector({
 
         if (error) throw error;
         
-        // Auto-select ALL recipes for this module (idiot-proof)
         if (data && data.length > 0 && moduleNumber) {
           const autoSelected = data.map(recipe => ({
             id: recipe.id,
@@ -68,7 +67,7 @@ export default function RecipeSelector({
             ingredients: recipe.ingredients || [],
             category: recipe.category,
             scale_factor: 1,
-            production_method: 'demo', // Default to demo
+            production_method: 'demo',
             num_batches: 1
           }));
           setSelectedRecipes(autoSelected);
@@ -127,7 +126,6 @@ export default function RecipeSelector({
     }));
   };
 
-  // Recalculate batches when student count changes
   useEffect(() => {
     if (selectedRecipes.length > 0) {
       setSelectedRecipes(prev => prev.map(recipe => ({
@@ -137,7 +135,6 @@ export default function RecipeSelector({
     }
   }, [studentCount]);
 
-  // Aggregate ingredients
   const aggregatedIngredients = useMemo(() => {
     const ingredientMap = new Map();
 
@@ -166,7 +163,6 @@ export default function RecipeSelector({
     return Array.from(ingredientMap.values());
   }, [selectedRecipes]);
 
-  // Notify parent of changes
   useEffect(() => {
     if (onIngredientsChange) {
       onIngredientsChange(aggregatedIngredients);
@@ -176,11 +172,16 @@ export default function RecipeSelector({
     }
   }, [aggregatedIngredients, selectedRecipes]);
 
-  // Filter available recipes
   const filteredAvailable = availableRecipes.filter(r => 
     !selectedRecipes.find(s => s.id === r.id) &&
     r.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleApplyIngredients = () => {
+    if (onApplyIngredients && aggregatedIngredients.length > 0) {
+      onApplyIngredients(aggregatedIngredients);
+    }
+  };
 
   if (!courseCode) {
     return (
@@ -211,7 +212,6 @@ export default function RecipeSelector({
         )}
       </div>
 
-      {/* Add Recipe Panel - only show if no module filter */}
       {showAddRecipe && !moduleNumber && (
         <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <input
@@ -256,7 +256,6 @@ export default function RecipeSelector({
         </div>
       )}
 
-      {/* Selected Recipes Table */}
       {selectedRecipes.length === 0 ? (
         <div className="text-gray-500 text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
           {loading ? 'Loading recipes...' : moduleNumber ? 'No recipes assigned to this module' : 'No recipes selected'}
@@ -325,12 +324,19 @@ export default function RecipeSelector({
         </div>
       )}
 
-      {/* Ingredients Summary */}
       {aggregatedIngredients.length > 0 && (
         <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-          <h4 className="font-medium text-green-800 mb-2">
-            Calculated Ingredients ({aggregatedIngredients.length} items)
-          </h4>
+          <div className="flex justify-between items-center mb-2">
+            <h4 className="font-medium text-green-800">
+              Calculated Ingredients ({aggregatedIngredients.length} items)
+            </h4>
+            <button
+              onClick={handleApplyIngredients}
+              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+            >
+              ✓ Use These Ingredients
+            </button>
+          </div>
           <div className="text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto">
             {aggregatedIngredients.slice(0, 10).map((ing, idx) => (
               <div key={idx} className="flex justify-between">

@@ -658,6 +658,22 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
             initialRecipeNames={recipes}
             moduleNumber={reqModule}
             studentCount={studentCount}
+            onApplyIngredients={(ingredients) => {
+              const newItems = {};
+              ingredients.forEach((ing, idx) => {
+                const id = `recipe-ing-${idx}`;
+                newItems[id] = {
+                  id,
+                  name: ing.name,
+                  unit: ing.unit,
+                  quantity: Math.ceil(ing.quantity * 10) / 10,
+                  cost_per_unit: 0,
+                  total: 0,
+                  notes: ""
+                };
+              });
+              setOrderItems(newItems);
+            }}
             onIngredientsChange={(ingredients) => {
               const newItems = {};
               ingredients.forEach((ing, idx) => {
