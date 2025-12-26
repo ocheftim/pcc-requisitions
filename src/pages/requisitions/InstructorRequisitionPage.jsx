@@ -30,6 +30,8 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
   const [editingItemId, setEditingItemId] = useState(null);
   const [swapSearch, setSwapSearch] = useState('');
   const [pendingEdits, setPendingEdits] = useState([]);
+  const [approvalStatus, setApprovalStatus] = useState("pending");
+  const [approvalComment, setApprovalComment] = useState("");
   const [notes, setNotes] = useState('');
 
   const instructors = [
@@ -521,7 +523,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       )}
       
       <div className="p-6 max-w-7xl mx-auto">
-        {editingRequisitionId && (
+        {editingRequisitionId && !hideNav && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex justify-between items-center">
             <div>
               <span className="font-bold text-yellow-800">✏️ Editing Requisition</span>
@@ -604,7 +606,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
-              <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-700">Recipe / Menu</label>{selectedClass && <a href={`/recipes?class=${selectedClass}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm">📖 View Class Recipes</a>}</div>
+              <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-700">Recipe / Menu</label>{!hideNav && selectedClass && <a href={`/recipes?class=${selectedClass}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm">📖 View Class Recipes</a>}</div>
               <input
                 type="text"
                 value={recipes}
@@ -656,6 +658,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
             courseCode={selectedClass}
             initialRecipeNames={recipes}
             moduleNumber={reqModule}
+            hideNav={hideNav}
             studentCount={studentCount}
             onApplyIngredients={(ingredients) => {
               const newItems = {};
@@ -696,6 +699,17 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           />
         </div>
 
+        {hideNav ? (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex justify-between items-center">
+          <div>
+            <span className="font-semibold text-gray-700">Total:</span>
+            <span className="ml-2 text-xl font-bold">${totalCost.toFixed(2)}</span>
+          </div>
+          <div className={`px-4 py-2 rounded-lg font-bold ${totalCost <= labBudget ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+            {totalCost <= labBudget ? "✓ Within Budget" : "⚠ Over Budget"}
+          </div>
+        </div>
+      ) : (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex justify-between items-center">
           <div>
             <span className="font-semibold text-blue-800">Budget:</span>
@@ -714,7 +728,9 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
             </span>
           </div>
         </div>
+      )}
 
+        {!hideNav && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex gap-4 items-end">
             <div className="flex-1 relative">
@@ -794,20 +810,21 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
             </div>
           )}
         </div>
+        )}
 
         {Object.keys(orderItems).length > 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-blue-800">Your Order ({Object.keys(orderItems).length} items)</h3>
-              <div className="flex gap-2">
+              {!hideNav && <div className="flex gap-2">
                 <button onClick={clearForm} className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm">Clear All</button>
                 <button 
                   onClick={handleSubmit} 
                   className={`px-4 py-2 text-white rounded-lg text-sm font-medium ${editingRequisitionId ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'}`}
                 >
-                  {editingRequisitionId ? '💾 Update Requisition' : '✓ Submit Requisition'}
+                  {hideNav && editingRequisitionId ? '✓ APPROVE REQUISITION' : editingRequisitionId ? '💾 Update Requisition' : '✓ Submit Requisition'}
                 </button>
-              </div>
+              </div>}
             </div>
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -818,7 +835,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
                   <th className="text-center px-3 py-2 w-24">Qty</th>
                   <th className="text-right px-3 py-2">Total</th>
                   <th className="px-3 py-2 w-32">Notes</th>
-                  <th className="w-10"></th>
+                  {!hideNav && <th className="w-10"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -865,14 +882,14 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
                     <td className="px-3 py-2">{item.unit}</td>
                     <td className="px-3 py-2 text-right">${getUnitCost(item).toFixed(2)}</td>
                     <td className="px-3 py-2">
-                      <input
+                      {hideNav ? <span className="text-center">{item.quantity}</span> : <input
                         type="number"
                         min="0"
                         step="0.5"
                         value={item.quantity || ''}
                         onChange={(e) => updateQuantity(item.id, e.target.value)}
                         className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
-                      />
+                      />}
                     </td>
                     <td className="px-3 py-2 text-right font-medium">
                       ${(getUnitCost(item) * (item.quantity || 0)).toFixed(2)}
@@ -880,18 +897,18 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
                     <td className="px-3 py-2">
                       <input
                         type="text"
-                        placeholder="Note..."
+                        placeholder={hideNav ? "Different ingredient or amount?" : "Note..."}
                         value={item.note || ''}
                         onChange={(e) => updateItemNote(item.id, e.target.value)}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    {!hideNav && <td className="px-3 py-2">
                       <button
                         onClick={() => updateQuantity(item.id, 0)}
                         className="text-red-500 hover:text-red-700"
                       >✕</button>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -906,6 +923,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           </div>
         )}
 
+        {!hideNav && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-4">
@@ -991,8 +1009,11 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
             </div>
           ))}
         </div>
+        )}
 
-        {Object.keys(orderItems).length > 0 && (
+
+
+        {Object.keys(orderItems).length > 0 && !hideNav && (
           <div className="sticky bottom-4 bg-white rounded-lg shadow-lg border border-gray-300 p-4 flex justify-between items-center">
             <div className="text-lg">
               <span className="text-gray-600">Total:</span>
@@ -1004,7 +1025,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
               onClick={handleSubmit} 
               className={`px-6 py-3 text-white rounded-lg font-medium ${editingRequisitionId ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'}`}
             >
-              {editingRequisitionId ? '💾 Update Requisition' : '✓ Submit Requisition'}
+              {hideNav && editingRequisitionId ? '✓ APPROVE REQUISITION' : editingRequisitionId ? '💾 Update Requisition' : '✓ Submit Requisition'}
             </button>
           </div>
         )}

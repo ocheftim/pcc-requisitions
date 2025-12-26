@@ -341,7 +341,9 @@ export default function MyRequisitionsPage({ initialFilter = null }) {
               {(() => {
                 let lastWeek = null;
                 return pendingReqs.map((req, idx) => {
-                  const weekNum = parseInt(req.week?.match(/Week (\d+)/)?.[1] || 99);
+                  const classDate = new Date(req.class_date);
+                  const semesterStart = new Date("2026-01-12");
+                  const weekNum = Math.ceil((classDate - semesterStart) / (7 * 24 * 60 * 60 * 1000));
                   const showHeader = weekNum !== lastWeek;
                   lastWeek = weekNum;
                   return (

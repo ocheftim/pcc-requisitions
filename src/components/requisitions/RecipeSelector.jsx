@@ -26,6 +26,7 @@ export default function RecipeSelector({
   onApplyIngredients,
   moduleNumber = null,
   isEditing = false,
+  hideNav = false,
   initialRecipes = []
 }) {
   const [availableRecipes, setAvailableRecipes] = useState([]);
@@ -33,6 +34,7 @@ export default function RecipeSelector({
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddRecipe, setShowAddRecipe] = useState(false);
+  const [expandedRecipeId, setExpandedRecipeId] = useState(null);
 
   // Fetch recipes filtered by course AND module
   useEffect(() => {
@@ -302,10 +304,29 @@ export default function RecipeSelector({
               {selectedRecipes.map(recipe => (
                 <tr key={recipe.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2">
-                    <div className="font-medium text-gray-800">{recipe.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {recipe.ingredients?.length || 0} ingredients
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-gray-800">{recipe.name}</span>
+                      <button
+                        onClick={() => setExpandedRecipeId(expandedRecipeId === recipe.id ? null : recipe.id)}
+                        className="text-blue-600 hover:text-blue-800 text-xs ml-2"
+                      >
+                        {expandedRecipeId === recipe.id ? "Hide ▲" : "View ▼"}
+                      </button>
                     </div>
+                    <div className="text-xs text-gray-500">
+                      {recipe.ingredients?.length || 0} ingredients • Yields: {recipe.yield_amount || 1} {recipe.yield_unit || "batch"}
+                    </div>
+                    {expandedRecipeId === recipe.id && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded border text-xs">
+                        <div className="font-medium text-blue-800 mb-1">Scaled Ingredients:</div>
+                        {(recipe.ingredients || []).map((ing, idx) => (
+                          <div key={idx} className="flex justify-between py-0.5">
+                            <span>{ing.name}</span>
+                            <span className="font-medium">{(ing.quantity * recipe.scale_factor * recipe.num_batches).toFixed(2)} {ing.unit}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <select
@@ -350,7 +371,7 @@ export default function RecipeSelector({
         </div>
       )}
 
-      {aggregatedIngredients.length > 0 && (
+      {aggregatedIngredients.length > 0 && !hideNav && (
         <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
           <div className="flex justify-between items-center mb-2">
             <h4 className="font-medium text-green-800">
