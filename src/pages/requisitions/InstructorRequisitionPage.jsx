@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getIngredients, saveRequisition, updateRequisition, supabase } from '../../lib/supabase';
 import { calculateUnitPrice } from "../../utils/packSizeParser";
 import { sendRequisitionEmails } from '../../lib/emailService';
+import RecipeSelector from '../../components/requisitions/RecipeSelector';
 
 export default function InstructorRequisitionPage({ hideNav = false }) {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
   const [program, setProgram] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [recipes, setRecipes] = useState('');
+  const [labRecipes, setLabRecipes] = useState([]);
   const [orderItems, setOrderItems] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [customItemName, setCustomItemName] = useState('');
@@ -644,6 +646,34 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
               />
             </div>
           </div>
+        </div>
+
+        {/* Recipe Selector */}
+        <div className="mb-6">
+          <RecipeSelector
+            courseCode={selectedClass}
+            studentCount={studentCount}
+            onIngredientsChange={(ingredients) => {
+              const newItems = {};
+              ingredients.forEach((ing, idx) => {
+                const id = `recipe-ing-${idx}`;
+                newItems[id] = {
+                  id,
+                  name: ing.name,
+                  unit: ing.unit,
+                  quantity: Math.ceil(ing.quantity * 10) / 10,
+                  cost_per_unit: 0,
+                  notes: `From: ${ing.sources.map(s => s.recipe).join(", ")}`
+                };
+              });
+              setOrderItems(prev => ({ ...prev, ...newItems }));
+            }}
+            onRecipesChange={(recs) => {
+              setLabRecipes(recs);
+              setRecipes(recs.map(r => r.name).join("; "));
+            }}
+            initialRecipes={labRecipes}
+          />
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex justify-between items-center">
