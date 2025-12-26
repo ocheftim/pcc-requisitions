@@ -73,7 +73,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
         }
       };
       loadRequisition();
-      return;
+
     }
 
 
@@ -194,7 +194,6 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
         }
       };
       loadRequisition();
-      return;
     }
 
 
@@ -380,7 +379,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       return sum + (getUnitCost(item) * (item.quantity || 0));
     }, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderItems]);
+  }, [orderItems, allIngredients]);
 
   const handleSubmit = async () => {
     if (!instructor || !program || !selectedClass) {

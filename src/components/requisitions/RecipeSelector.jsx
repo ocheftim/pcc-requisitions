@@ -25,6 +25,7 @@ export default function RecipeSelector({
   onRecipesChange,
   onApplyIngredients,
   moduleNumber = null,
+  isEditing = false,
   initialRecipes = []
 }) {
   const [availableRecipes, setAvailableRecipes] = useState([]);
@@ -71,6 +72,23 @@ export default function RecipeSelector({
             num_batches: 1
           }));
           setSelectedRecipes(autoSelected);
+          
+          // Auto-apply ingredients when editing module-based requisition
+          if (isEditing && onApplyIngredients) {
+            const aggregated = [];
+            const ingredientMap = new Map();
+            autoSelected.forEach(recipe => {
+              (recipe.ingredients || []).forEach(ing => {
+                const key = `${ing.name}-${ing.unit}`.toLowerCase();
+                if (ingredientMap.has(key)) {
+                  ingredientMap.get(key).quantity += (ing.quantity || 0);
+                } else {
+                  ingredientMap.set(key, { name: ing.name, unit: ing.unit, quantity: ing.quantity || 0 });
+                }
+              });
+            });
+            onApplyIngredients(Array.from(ingredientMap.values()));
+          }
         }
         
         setAvailableRecipes(data || []);
@@ -187,6 +205,14 @@ export default function RecipeSelector({
     return (
       <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-gray-500 text-center">
         Select a class to view available recipes
+      </div>
+    );
+  }
+
+  if (isEditing && moduleNumber === null) {
+    return (
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-gray-500 text-center">
+        Loading module recipes...
       </div>
     );
   }
