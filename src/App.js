@@ -122,7 +122,7 @@ function Navigation() {
           </NavLink>
           
           <NavLink
-            to="/settings"
+            to="/admin" className={({ isActive }) => `px-4 py-2 rounded-lg transition-colors ${isActive ? "bg-blue-600 text-white" : "text-blue-800 hover:bg-blue-100"}`}>Admin</NavLink><NavLink to="/settings"
             className={({ isActive }) =>
               `px-4 py-2 rounded-lg transition-colors ${
                 isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
