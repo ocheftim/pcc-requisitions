@@ -9,6 +9,7 @@ import SettingsPage from './pages/requisitions/SettingsPage';
 import CateringWorkflowSystem from './pages/requisitions/CateringWorkflowSystem';
 import StandardizedRecipePage from './pages/requisitions/StandardizedRecipePage';
 import PullListPage from "./pages/requisitions/PullListPage";
+import AdminConsolidatedPage from "./pages/requisitions/AdminConsolidatedPage";
 import PrintRequisitionPage from "./pages/requisitions/PrintRequisitionPage";
 
 function Navigation() {
@@ -162,6 +163,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/catering" element={<CateringWorkflowSystem />} />
           <Route path="/recipes" element={<StandardizedRecipePage />} />
+          <Route path="/admin" element={<AdminConsolidatedPage />} />
           <Route path="/instructor-login" element={<InstructorLoginPage />} />
           <Route path="/instructor" element={<InstructorRequisitionPage hideNav={true} />} />
           <Route path="/requisitions/instructor" element={<InstructorRequisitionPage />} />

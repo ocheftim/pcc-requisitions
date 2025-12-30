@@ -1,3 +1,4 @@
+import BulkUpdateModal from '../../components/BulkUpdateModal';
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 // Ingredients now loaded from Supabase
@@ -7,7 +8,7 @@ import { calculateUnitPrice } from "../../utils/packSizeParser";
 
 export default function IngredientsPage() {
   const [searchParams] = useSearchParams();
-  const { categoryStructure, categories, vendors } = useSettings();
+  const { categoryStructure, categories, vendors, getBrandsForSubcategory, refreshSettings } = useSettings();
   const [ingredients, setIngredients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -18,6 +19,11 @@ export default function IngredientsPage() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
+  const [showCustomUnit, setShowCustomUnit] = useState(false);
+  const [showCustomBrand, setShowCustomBrand] = useState(false);
+  const [customUnitValue, setCustomUnitValue] = useState('');
+  const [customBrandValue, setCustomBrandValue] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [sortColumn, setSortColumn] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
@@ -26,6 +32,15 @@ export default function IngredientsPage() {
   const [importData, setImportData] = useState([]);
   const [importMatches, setImportMatches] = useState({});
   const [openMenuId, setOpenMenuId] = useState(null);
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    if (openMenuId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openMenuId]);
+
   const [viewMode, setViewMode] = useState('grouped');
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -44,7 +59,20 @@ export default function IngredientsPage() {
     vendor: 'Sysco', vendorCode: '', packSize: '', casePrice: 0, unitPrice: 0, servingsPerCase: 0, programs: []
   });
 
-  const units = ['lb', 'oz', 'g', 'kg', 'ea', 'doz', 'bunch', 'qt', 'gal', 'pt', 'cup', 'can', 'bottle', 'jar', 'bag', 'box', 'case', 'c', 'L', 'mL'];
+  const units = ['lb', 'oz', 'g', 'kg', 'ea', 'doz', 'bunch', 'qt', 'gal', 'pt', 'cup', 'can', 'bottle', 'jar', 'bag', 'box', 'case', 'c', 'L', 'mL', 'rack', 'slab', 'sheet', 'loaf', 'head', 'pkg', '12oz pkg', '16oz pkg', '8oz pkg', '1lb pkg', '5lb bag', '10lb bag', '25lb bag', '50lb bag', '#10 can', 'pint', 'quart', 'half gal', 'liter', '750ml'];
+
+  const getUnitsForCategory = (category, subcategory) => {
+    const cat = (category || '').toLowerCase();
+    const sub = (subcategory || '').toLowerCase();
+    if (sub.includes('egg')) return ['ea', 'doz'];
+    if (sub.includes('oil') || sub.includes('fat') || sub.includes('vinegar') || sub.includes('sauce') || sub.includes('milk') || sub.includes('cream') || sub.includes('juice') || sub.includes('stock') || cat.includes('beverage')) return ['oz', 'cup', 'pt', 'qt', 'gal', 'L', 'mL'];
+    if (sub.includes('flour') || sub.includes('starch') || sub.includes('grain') || sub.includes('sugar') || sub.includes('sweet') || sub.includes('rice') || sub.includes('pasta') || sub.includes('spice') || sub.includes('leaven')) return ['oz', 'lb', 'g', 'kg', 'cup'];
+    if (cat.includes('produce')) return ['ea', 'bunch', 'head', 'lb', 'oz'];
+    if (cat.includes('meat') || cat.includes('seafood')) return ['lb', 'oz', 'ea', 'rack', 'slab'];
+    if (cat.includes('dairy')) return ['lb', 'oz', 'ea', 'cup', 'gal', 'qt'];
+    if (cat.includes('bakery')) return ['ea', 'loaf', 'doz', 'lb', 'oz'];
+    return ['ea', 'lb', 'oz', 'cup', 'pt', 'qt', 'gal', 'doz'];
+  };
 
   // Load ingredients from Supabase
   useEffect(() => {
@@ -84,29 +112,47 @@ export default function IngredientsPage() {
 
   // Calculate unit price from pack size
   const calculateUnitPriceFromPack = (item) => {
-    if (!item.packSize || !item.casePrice) return item.unitPrice || 0;
-    const pack = item.packSize;
-    const casePrice = item.casePrice || 0;
-    const match = pack.match(/^(\d+)\/(\d+\.?\d*)\s*(LB|OZ|GAL|QT|CT|EA|PC|DZ|KG|G|L|ML)?$/i);
-    if (match) {
-      const count = parseFloat(match[1]);
-      const size = parseFloat(match[2]);
-      const unitType = (match[3] || '').toUpperCase();
-      let totalUnits = count * size;
-      if (unitType === 'OZ') totalUnits = totalUnits / 16;
-      else if (unitType === 'G') totalUnits = totalUnits / 453.6;
-      else if (unitType === 'ML') totalUnits = totalUnits / 946;
-      if (totalUnits > 0) return casePrice / totalUnits;
-    }
-    const singleMatch = pack.match(/^(\d+\.?\d*)\s*(LB|OZ|GAL|QT|CT|EA|PC|DZ|KG|G|L|ML)?$/i);
-    if (singleMatch) {
-      let units = parseFloat(singleMatch[1]);
-      const unitType = (singleMatch[2] || '').toUpperCase();
-      if (unitType === 'OZ') units = units / 16;
-      else if (unitType === 'G') units = units / 453.6;
-      if (units > 0) return casePrice / units;
-    }
-    return item.unitPrice || 0;
+    if (!item.packSize || !item.casePrice) return null;
+    const pack = item.packSize.toString().trim();
+    const casePrice = parseFloat(item.casePrice) || 0;
+    const unit = (item.unit || '').toLowerCase();
+    
+    const toOz = (num, m) => { m = (m || '').toUpperCase(); if (m === 'OZ') return num; if (m === 'LB') return num * 16; if (m === 'G') return num / 28.35; if (m === 'KG') return num * 35.27; return null; };
+    const toFlOz = (num, m) => { m = (m || '').toUpperCase(); if (m === 'OZ' || m === 'FLOZ') return num; if (m === 'GAL') return num * 128; if (m === 'QT') return num * 32; if (m === 'PT') return num * 16; if (m === 'CUP' || m === 'C') return num * 8; if (m === 'L') return num * 33.814; if (m === 'ML') return num / 29.574; return null; };
+    const toEach = (num, m) => { m = (m || '').toUpperCase(); if (m === 'DZ' || m === 'DOZ') return num * 12; return num; };
+    
+    const getUnitInfo = (u) => {
+      if (/^ea$/i.test(u)) return { size: 1, type: 'count' };
+      if (/^doz$/i.test(u)) return { size: 12, type: 'count' };
+      if (/^oz$/i.test(u)) return { size: 1, measure: 'OZ', type: 'weight' };
+      if (/^lb$/i.test(u)) return { size: 16, measure: 'OZ', type: 'weight' };
+      if (/^gal$/i.test(u)) return { size: 128, measure: 'FLOZ', type: 'volume' };
+      if (/^qt$/i.test(u)) return { size: 32, measure: 'FLOZ', type: 'volume' };
+      if (/^pt$/i.test(u)) return { size: 16, measure: 'FLOZ', type: 'volume' };
+      if (/^cup$/i.test(u) || /^c$/i.test(u)) return { size: 8, measure: 'FLOZ', type: 'volume' };
+      const m = u.match(/(\d+\.?\d*)\s*(oz|lb|g|kg)/i);
+      if (m) return { size: toOz(parseFloat(m[1]), m[2]), measure: 'OZ', type: 'weight' };
+      return null;
+    };
+    
+    let packCount = 1, packSize = null, packMeasure = null;
+    const slashMatch = pack.match(/^(\d+)\s*\/\s*(\d+\.?\d*)\s*(oz|lb|g|kg|gal|qt|pt|l|ml|dz|doz|ea|ct)?$/i);
+    if (slashMatch) { packCount = parseFloat(slashMatch[1]); packSize = parseFloat(slashMatch[2]); packMeasure = (slashMatch[3] || 'EA').toUpperCase(); }
+    else { const singleMatch = pack.match(/^(\d+\.?\d*)\s*(oz|lb|g|kg|gal|qt|pt|l|ml|dz|doz)$/i); if (singleMatch) { packSize = parseFloat(singleMatch[1]); packMeasure = singleMatch[2].toUpperCase(); } else { const countMatch = pack.match(/^(\d+)/); if (countMatch) packCount = parseFloat(countMatch[1]); } }
+    
+    const unitInfo = getUnitInfo(unit);
+    if (!unitInfo) { if (packMeasure) return null; if (packCount > 0 && !packSize) return casePrice / packCount; return null; }
+    
+    const countMeasures = ['EA', 'DZ', 'DOZ', 'CT'];
+    const volMeasures = ['GAL', 'QT', 'PT', 'L', 'ML', 'OZ'];
+    const wtMeasures = ['OZ', 'LB', 'G', 'KG'];
+    
+    if (unitInfo.type === 'count') { if (packMeasure && countMeasures.includes(packMeasure)) { const totalEach = packCount * toEach(packSize || 1, packMeasure); return casePrice / (totalEach / unitInfo.size); } if (!packMeasure) return casePrice / packCount; return null; }
+    if ((unitInfo.type === 'volume' || (unit === 'oz' && volMeasures.includes(packMeasure))) && packMeasure && volMeasures.includes(packMeasure)) { const totalFlOz = toFlOz(packCount * (packSize || 1), packMeasure); const unitFlOz = unit === 'oz' ? 1 : unitInfo.size; if (totalFlOz) return casePrice / (totalFlOz / unitFlOz); }
+    if (unitInfo.type === 'weight' && packMeasure && wtMeasures.includes(packMeasure)) { const totalOz = toOz(packCount * packSize, packMeasure); if (totalOz) return casePrice / (totalOz / unitInfo.size); }
+    if (unitInfo.type === 'weight' && /pkg|pack|bag|box|can|jar/i.test(unit) && packMeasure && wtMeasures.includes(packMeasure)) { const totalOz = toOz(packCount * packSize, packMeasure); if (totalOz) return casePrice / (totalOz / unitInfo.size); }
+    
+    return null;
   };
 
   const getCalculatedPrices = (item) => {
@@ -253,7 +299,8 @@ export default function IngredientsPage() {
   const handleDeleteIngredient = async (id) => {
     const ing = ingredients.find(i => i.id === id);
     if (!window.confirm("Delete " + (ing?.name || "this ingredient") + "?")) return;
-    await deleteIngredientDB(id);
+    const { error } = await supabase.from('ingredients').delete().eq('id', id);
+    if (error) { console.error('Delete failed:', error); alert('Delete failed'); return; }
     setIngredients(prev => prev.filter(i => i.id !== id));
     setOpenMenuId(null);
   };
@@ -357,7 +404,9 @@ export default function IngredientsPage() {
   // Filter ingredients
   const filteredIngredients = ingredients.filter(ing => {
     const term = searchTerm.toLowerCase();
-    const matchesSearch = !term || ing.name.toLowerCase().includes(term) || (ing.brand || '').toLowerCase().includes(term) || (ing.vendorCode || '').toLowerCase().includes(term);
+    const termNorm = term.replace(/s$/, '');
+    const nameNorm = ing.name.toLowerCase().replace(/s$/, '');
+    const matchesSearch = !term || nameNorm.includes(termNorm) || ing.name.toLowerCase().includes(term) || (ing.brand || '').toLowerCase().includes(term) || (ing.vendorCode || '').toLowerCase().includes(term);
     const matchesCategory = !filterCategory || ing.category === filterCategory;
     const matchesVendor = !filterVendor || ing.vendor === filterVendor;
     const matchesSubcategory = !filterSubcategory || ing.subcategory === filterSubcategory;
@@ -444,6 +493,7 @@ export default function IngredientsPage() {
           <p className="text-sm text-gray-500">{filteredIngredients.length} of {ingredients.length} items</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowBulkUpdate(true)} className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600">⚠️ Needs Update</button>
           <button onClick={() => setShowAddForm(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">+ Add</button>
           <button onClick={exportIngredients} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">↓ Export</button>
         </div>
@@ -568,9 +618,9 @@ export default function IngredientsPage() {
                             <td className="px-3 py-2 text-right font-medium text-green-700">${unitPrice.toFixed(4)}</td>
                             <td className="p-2 text-center text-xs">{(item.programs || []).map(p => p === 'Baking & Pastry Arts' ? 'B' : p === 'Culinary Arts' ? 'C' : 'F').join('')}</td>
                             <td className="p-2 text-center relative">
-                              <button onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)} className="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded">⋮</button>
+                              <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === item.id ? null : item.id); }} className="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded">⋮</button>
                               {openMenuId === item.id && (
-                                <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg z-50 py-1 min-w-32">
+                                <div className="absolute right-0 bottom-full mb-1 bg-white border rounded-lg shadow-lg z-50 py-1 min-w-32">
                                   <button onClick={() => { handleEdit(item); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">✏️ Edit</button>
                                   <button onClick={() => { handleDuplicateIngredient(item); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">⧉ Copy</button>
                                   <button onClick={() => { handleDeleteIngredient(item.id); }} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">🗑 Delete</button>
@@ -643,9 +693,9 @@ export default function IngredientsPage() {
                       );
                     })}
                     <td className="p-2 border text-center relative">
-                      <button onClick={() => setOpenMenuId(openMenuId === ing.id ? null : ing.id)} className="text-gray-500 hover:text-gray-700 text-lg">⋮</button>
+                      <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === ing.id ? null : ing.id); }} className="text-gray-500 hover:text-gray-700 text-lg">⋮</button>
                       {openMenuId === ing.id && (
-                        <div className="absolute right-0 top-8 bg-white border rounded shadow-lg z-50 min-w-24">
+                        <div className="absolute right-0 bottom-full mb-1 bg-white border rounded shadow-lg z-50 min-w-24">
                           <button onClick={() => { handleEdit(ing); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">✎ Edit</button>
                           <button onClick={() => handleDuplicateIngredient(ing)} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">⧉ Copy</button>
                           <button onClick={() => { handleDeleteIngredient(ing.id); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">🗑 Delete</button>
@@ -662,8 +712,8 @@ export default function IngredientsPage() {
 
       {/* Edit Modal */}
       {showEditModal && editingId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => { setShowEditModal(false); setEditingId(null); setEditForm({}); }}>
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-xl font-bold mb-4">Edit Ingredient</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -672,31 +722,97 @@ export default function IngredientsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Category</label>
-                <select value={editForm.category || ''} onChange={(e) => setEditForm({...editForm, category: e.target.value})} className="w-full px-3 py-2 border rounded">
-                  {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                <select value={editForm.category || ''} onChange={(e) => setEditForm({...editForm, category: e.target.value, subcategory: '', brand: ''})} className="w-full px-3 py-2 border rounded">
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Subcategory</label>
-                <input type="text" value={editForm.subcategory || ''} onChange={(e) => setEditForm({...editForm, subcategory: e.target.value})} className="w-full px-3 py-2 border rounded" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Unit</label>
-                <select value={editForm.unit || 'lb'} onChange={(e) => setEditForm({...editForm, unit: e.target.value})} className="w-full px-3 py-2 border rounded">
-                  {units.map(u => <option key={u} value={u}>{u}</option>)}
+                <select value={editForm.subcategory || ''} onChange={(e) => setEditForm({...editForm, subcategory: e.target.value, brand: ''})} className="w-full px-3 py-2 border rounded">
+                  <option value="">Select...</option>
+                  {(categoryStructure[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium mb-1">Unit</label>
+                {showCustomUnit ? (
+                  <div className="flex gap-1">
+                    <input 
+                      type="text" 
+                      value={customUnitValue} 
+                      onChange={(e) => setCustomUnitValue(e.target.value)} 
+                      className="flex-1 px-3 py-2 border rounded"
+                      placeholder="Enter custom unit..."
+                      autoFocus
+                    />
+                    <button type="button" onClick={() => { setEditForm({...editForm, unit: customUnitValue}); setShowCustomUnit(false); }} className="px-3 py-2 bg-green-500 text-white rounded">✓</button>
+                    <button type="button" onClick={() => { setShowCustomUnit(false); setCustomUnitValue(''); }} className="px-3 py-2 bg-gray-300 rounded">✕</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <select 
+                      value={editForm.unit || ''} 
+                      onChange={(e) => setEditForm({...editForm, unit: e.target.value})} 
+                      className="flex-1 px-3 py-2 border rounded"
+                    >
+                      <option value="">Select unit...</option>
+                      {getUnitsForCategory(editForm.category, editForm.subcategory).map(u => <option key={u} value={u}>{u}</option>)}
+                      {editForm.unit && !getUnitsForCategory(editForm.category, editForm.subcategory).includes(editForm.unit) && <option value={editForm.unit}>{editForm.unit} (current)</option>}
+                    </select>
+                    <button type="button" onClick={() => { setShowCustomUnit(true); setCustomUnitValue(editForm.unit || ''); }} className="px-3 py-2 bg-blue-500 text-white rounded text-sm">+ Add</button>
+                  </div>
+                )}
+                
+              </div>
+              <div>
                 <label className="block text-sm font-medium mb-1">Brand</label>
-                <input type="text" value={editForm.brand || ''} onChange={(e) => setEditForm({...editForm, brand: e.target.value})} className="w-full px-3 py-2 border rounded" />
+                {showCustomBrand ? (
+                  <div className="flex gap-1">
+                    <input 
+                      type="text" 
+                      value={customBrandValue} 
+                      onChange={(e) => setCustomBrandValue(e.target.value)} 
+                      className="flex-1 px-3 py-2 border rounded"
+                      placeholder="Enter new brand..."
+                      autoFocus
+                    />
+                    <button type="button" onClick={async () => { 
+                      setEditForm({...editForm, brand: customBrandValue}); 
+                      // Also save to settings
+                      const { data: settings } = await supabase.from('settings').select('*').eq('key', 'brands').single();
+                      const brands = settings?.value || {};
+                      const brandKey = (editForm.category || 'Other') + '|' + (editForm.subcategory || 'Other');
+                      if (!brands[brandKey]) brands[brandKey] = [];
+                      if (!brands[brandKey].includes(customBrandValue)) {
+                        brands[brandKey].push(customBrandValue);
+                        await supabase.from('settings').upsert({ key: 'brands', value: brands }, { onConflict: 'key' });
+                        refreshSettings();
+                      }
+                      setShowCustomBrand(false); 
+                      setCustomBrandValue('');
+                    }} className="px-3 py-2 bg-green-500 text-white rounded">✓</button>
+                    <button type="button" onClick={() => { setShowCustomBrand(false); setCustomBrandValue(''); }} className="px-3 py-2 bg-gray-300 rounded">✕</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <select 
+                      value={editForm.brand || ''} 
+                      onChange={(e) => setEditForm({...editForm, brand: e.target.value})} 
+                      className="flex-1 px-3 py-2 border rounded"
+                    >
+                      <option value="">Select brand...</option>
+                      {(getBrandsForSubcategory(editForm.category, editForm.subcategory) || []).map(b => <option key={b} value={b}>{b}</option>)}
+                      {editForm.brand && !(getBrandsForSubcategory(editForm.category, editForm.subcategory) || []).includes(editForm.brand) && <option value={editForm.brand}>{editForm.brand}</option>}
+                    </select>
+                    <button type="button" onClick={() => { setShowCustomBrand(true); setCustomBrandValue(''); }} className="px-3 py-2 bg-blue-500 text-white rounded text-sm">+ Add</button>
+                  </div>
+                )}
+                
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Vendor</label>
                 <select value={editForm.vendor || 'Sysco'} onChange={(e) => setEditForm({...editForm, vendor: e.target.value, vendorCode: ''})} className="w-full px-3 py-2 border rounded">
-                  <option value="Sysco">Sysco</option>
-                  <option value="US Foods">US Foods</option>
-                  <option value="Restaurant Depot">Restaurant Depot</option>
-                  <option value="Shamrock">Shamrock</option>
+                  {vendors.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
               <div>
@@ -705,15 +821,17 @@ export default function IngredientsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Pack Size</label>
-                <input type="text" value={editForm.packSize || ''} onChange={(e) => setEditForm({...editForm, packSize: e.target.value})} className="w-full px-3 py-2 border rounded" placeholder="e.g., 6/5LB" />
+                <input type="text" value={editForm.packSize || ''} onChange={(e) => setEditForm({...editForm, packSize: e.target.value})} className="w-full px-3 py-2 border rounded" placeholder="e.g., 6/5LB or 3L" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Case Price</label>
                 <input type="number" step="0.01" value={editForm.casePrice || 0} onChange={(e) => setEditForm({...editForm, casePrice: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 border rounded" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Unit Price</label>
-                <input type="number" step="0.0001" value={editForm.unitPrice || 0} onChange={(e) => setEditForm({...editForm, unitPrice: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 border rounded" />
+                <label className="block text-sm font-medium mb-1">Unit Price <span className="text-xs text-gray-400">(calculated)</span></label>
+                <div className="w-full px-3 py-2 border rounded bg-gray-50 text-gray-700 font-medium">
+                  {(() => { const p = calculateUnitPriceFromPack(editForm); return p !== null ? "$" + p.toFixed(4) : "N/A"; })()}
+                </div>
               </div>
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">Programs</label>
@@ -741,7 +859,7 @@ export default function IngredientsPage() {
 
       {/* Add Ingredient Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => { setShowEditModal(false); setEditingId(null); setEditForm({}); }}>
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
             <h2 className="text-xl font-bold mb-4">Add Ingredient</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -757,7 +875,9 @@ export default function IngredientsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Subcategory</label>
-                <input type="text" value={newIngredient.subcategory} onChange={(e) => setNewIngredient({...newIngredient, subcategory: e.target.value})} className="w-full px-3 py-2 border rounded" />
+                <select value={newIngredient.subcategory} onChange={(e) => setNewIngredient({...newIngredient, subcategory: e.target.value})} className="w-full px-3 py-2 border rounded">
+                  {(categoryStructure[newIngredient.category] || ['Other']).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Unit</label>
@@ -768,9 +888,7 @@ export default function IngredientsPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Vendor</label>
                 <select value={newIngredient.vendor} onChange={(e) => setNewIngredient({...newIngredient, vendor: e.target.value})} className="w-full px-3 py-2 border rounded">
-                  <option value="Sysco">Sysco</option>
-                  <option value="US Foods">US Foods</option>
-                  <option value="Restaurant Depot">Restaurant Depot</option>
+                  {vendors.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
               <div>
@@ -789,6 +907,7 @@ export default function IngredientsPage() {
           </div>
         </div>
       )}
+      <BulkUpdateModal isOpen={showBulkUpdate} onClose={() => setShowBulkUpdate(false)} onSave={() => loadIngredients()} />
     </div>
   );
 }
