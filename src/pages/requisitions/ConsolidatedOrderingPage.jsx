@@ -248,6 +248,7 @@ export default function ConsolidatedOrderingPage() {
   const [inventory, setInventory] = useState({}); // Track on-hand inventory from Supabase
   const [savingInventory, setSavingInventory] = useState(false);
   const [orderOverrides, setOrderOverrides] = useState({}); // Manual order qty overrides
+  const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category'
 
   // Load inventory from Supabase
   const loadInventory = async () => {
@@ -805,6 +806,24 @@ export default function ConsolidatedOrderingPage() {
               )}
             </div>
             
+            {/* Sort Toggle */}
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+              <span className="text-sm font-medium text-gray-600">Group by:</span>
+              <button 
+                onClick={() => setSortBy('vendor')} 
+                className={`px-3 py-1.5 rounded text-sm font-medium ${sortBy === 'vendor' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                Vendor
+              </button>
+              <button 
+                onClick={() => setSortBy('category')} 
+                className={`px-3 py-1.5 rounded text-sm font-medium ${sortBy === 'category' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                📦 Category
+              </button>
+            </div>
+            </div>
+            
             {/* Filter Summary & Actions */}
             <div className="flex justify-between items-center mt-3 pt-3 border-t">
               <div className="text-sm text-gray-600">
@@ -880,7 +899,7 @@ export default function ConsolidatedOrderingPage() {
                   <button onClick={clearFilters} className="mt-2 text-blue-600 hover:underline">Clear filters</button>
                 )}
               </div>
-            ) : (
+            ) : sortBy === 'vendor' ? (
               <div className="space-y-6">
                 {displayVendors.filter(v => selectedVendor === 'all' || v === selectedVendor).map(vendor => {
                   const data = displayOrders[vendor];
@@ -1000,6 +1019,104 @@ export default function ConsolidatedOrderingPage() {
                           </tr>
                         </tfoot>
                       </table>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Category View */
+              <div className="space-y-6">
+                {categoryOrder.filter(cat => consolidateByCategory[cat]).map(category => {
+                  const catData = consolidateByCategory[category];
+                  if (!catData || catData.items.length === 0) return null;
+                  
+                  // Category colors
+                  const catColors = {
+                    'Produce': 'bg-green-100 border-green-300',
+                    'Dairy & Eggs': 'bg-yellow-100 border-yellow-300',
+                    'Meat & Seafood': 'bg-red-100 border-red-300',
+                    'Bakery & Bread': 'bg-amber-100 border-amber-300',
+                    'Frozen': 'bg-blue-100 border-blue-300',
+                    'Pantry': 'bg-orange-100 border-orange-300',
+                    'Beverages': 'bg-purple-100 border-purple-300',
+                    'Wine & Spirits': 'bg-pink-100 border-pink-300',
+                  };
+                  const catColor = catColors[category] || 'bg-gray-100 border-gray-300';
+                  
+                  return (
+                    <div key={category} className={`border-2 rounded-lg overflow-hidden ${catColor}`}>
+                      <div className="px-4 py-3">
+                        <h2 className="text-xl font-bold text-gray-800">{category}</h2>
+                        <p className="text-sm text-gray-600">{catData.items.length} items</p>
+                      </div>
+                      <div className="bg-white">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 border-b">
+                              <th className="text-left px-4 py-2 font-medium text-gray-600">Item Name</th>
+                              <th className="text-left px-4 py-2 font-medium text-gray-600">EP Need</th>
+                              <th className="text-left px-4 py-2 font-medium text-gray-600">Pack Size</th>
+                              <th className="text-center px-4 py-2 font-medium text-gray-600">On Hand</th>
+                              <th className="text-center px-4 py-2 font-medium text-gray-600 bg-blue-50">Order</th>
+                              <th className="text-right px-4 py-2 font-medium text-gray-600">Est. Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {catData.items.map((item, idx) => {
+                              const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                              const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                              const isUnit = item.caseSize?.startsWith('1/');
+                              
+                              const onHand = getOnHand(category, item.name);
+                              const orderOverride = getOrderOverride(category, item.name);
+                              
+                              let effectiveOrder = calculatedOrder;
+                              if (orderOverride !== '') {
+                                effectiveOrder = orderOverride;
+                              } else if (onHand !== '') {
+                                effectiveOrder = Math.max(0, calculatedOrder - onHand);
+                              }
+                              
+                              const casePrice = item.casePrice || item.unitPrice || 0;
+                              const estCost = effectiveOrder * casePrice;
+                              
+                              return (
+                                <tr key={idx} className={`border-b hover:bg-gray-50 ${effectiveOrder === 0 ? 'opacity-50' : ''}`}>
+                                  <td className="px-4 py-2 font-medium">{item.name}</td>
+                                  <td className="px-4 py-2 text-gray-600">
+                                    <span className="font-medium">{item.quantity}</span>
+                                    <span className="text-gray-400 ml-1">{item.unit}</span>
+                                  </td>
+                                  <td className="px-4 py-2 text-gray-600 text-xs">{item.caseSize || '-'}</td>
+                                  <td className="px-4 py-2 text-center">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={onHand}
+                                      onChange={(e) => updateOnHand(category, item.name, e.target.value, 'case')}
+                                      placeholder="-"
+                                      className="w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-2 text-center bg-blue-50">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={orderOverride !== '' ? orderOverride : effectiveOrder}
+                                      onChange={(e) => setOrderOverride(category, item.name, e.target.value)}
+                                      className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${effectiveOrder > 0 ? 'text-blue-600' : 'text-green-600'}`}
+                                    />
+                                    <div className="text-xs text-gray-400">{isUnit ? '' : 'cases'}</div>
+                                  </td>
+                                  <td className="px-4 py-2 text-right">${estCost.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   );
                 })}
