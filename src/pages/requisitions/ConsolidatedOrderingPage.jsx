@@ -240,7 +240,7 @@ export default function ConsolidatedOrderingPage() {
   const [selectedArchive, setSelectedArchive] = useState(null);
   
   // New filter states
-  const [filterWeek, setFilterWeek] = useState('next'); // Default to NEXT week
+  const [filterWeek, setFilterWeek] = useState(null); // Will default to upcoming week after data loads
   const [filterInstructor, setFilterInstructor] = useState('all');
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterItemType, setFilterItemType] = useState('all'); // all, perishable, non-perishable
@@ -446,29 +446,34 @@ export default function ConsolidatedOrderingPage() {
     };
   }, [requisitions]);
 
+  // Set default week to upcoming semester week
+  useEffect(() => {
+    if (filterWeek === null && filterOptions.weeks.length > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Find the first week that starts today or in the future
+      const upcomingWeek = filterOptions.weeks.find(w => w.start >= today);
+      
+      if (upcomingWeek) {
+        setFilterWeek(upcomingWeek.key);
+      } else {
+        // If no upcoming weeks, default to the last week (most recent)
+        setFilterWeek(filterOptions.weeks[filterOptions.weeks.length - 1]?.key || 'all');
+      }
+    }
+  }, [filterOptions.weeks, filterWeek]);
+
 
 
   // Filter requisitions based on selected filters
   const filteredRequisitions = useMemo(() => {
     return requisitions.filter(req => {
-      // Week filter
-      if (filterWeek !== "all" && req.class_date) {
+      // Week filter - compare by Monday ISO date key
+      if (filterWeek && filterWeek !== "all" && req.class_date) {
         const { start } = getWeekRange(req.class_date);
         const reqWeekKey = start.toISOString().split("T")[0];
-        
-        // Handle "next" week filter - calculate next Monday
-        if (filterWeek === "next") {
-          const today = new Date();
-          const dayOfWeek = today.getDay();
-          const daysUntilNextMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
-          const nextMonday = new Date(today);
-          nextMonday.setDate(today.getDate() + daysUntilNextMonday);
-          nextMonday.setHours(0, 0, 0, 0);
-          const nextMondayKey = nextMonday.toISOString().split("T")[0];
-          if (reqWeekKey !== nextMondayKey) return false;
-        } else {
-          if (reqWeekKey !== filterWeek) return false;
-        }
+        if (reqWeekKey !== filterWeek) return false;
       }
       
       // Instructor filter
@@ -728,7 +733,7 @@ export default function ConsolidatedOrderingPage() {
   const displayOrders = selectedArchive ? selectedArchive.orders : consolidateByVendor;
   const displayVendors = Object.keys(displayOrders).sort();
   
-  const hasActiveFilters = filterWeek !== 'all' || filterInstructor !== 'all' || filterCourse !== 'all' || filterItemType !== 'all' || showGroceryOnly;
+  const hasActiveFilters = (filterWeek && filterWeek !== 'all') || filterInstructor !== 'all' || filterCourse !== 'all' || filterItemType !== 'all' || showGroceryOnly;
 
   if (loading) return <div className="p-6 flex items-center justify-center"><div className="text-gray-500">Loading orders...</div></div>;
 
@@ -757,8 +762,7 @@ export default function ConsolidatedOrderingPage() {
               <label className="text-sm font-medium text-gray-600">Filters:</label>
               
               {/* Week Filter */}
-              <select value={filterWeek} onChange={(e) => setFilterWeek(e.target.value)} className="px-3 py-2 border rounded-lg text-sm font-medium">
-                <option value="next">📅 Next Week</option>
+              <select value={filterWeek || 'all'} onChange={(e) => setFilterWeek(e.target.value)} className="px-3 py-2 border rounded-lg text-sm font-medium">
                 <option value="all">All Weeks</option>
                 {filterOptions.weeks.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
               </select>
