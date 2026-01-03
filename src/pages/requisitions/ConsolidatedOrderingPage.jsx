@@ -101,8 +101,114 @@ export default function ConsolidatedOrderingPage() {
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterItemType, setFilterItemType] = useState('all'); // all, perishable, non-perishable
   const [showGroceryOnly, setShowGroceryOnly] = useState(false);
+  const [inventory, setInventory] = useState({}); // Track on-hand inventory from Supabase
+  const [savingInventory, setSavingInventory] = useState(false);
 
-  useEffect(() => { loadData(); loadArchivedOrders(); }, []);
+  // Load inventory from Supabase
+  const loadInventory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_current')
+        .select('ingredient_name, quantity, unit, last_counted');
+      
+      if (error) throw error;
+      
+      const invMap = {};
+      (data || []).forEach(item => {
+        invMap[item.ingredient_name] = {
+          quantity: item.quantity,
+          unit: item.unit,
+          lastCounted: item.last_counted
+        };
+      });
+      setInventory(invMap);
+    } catch (error) {
+      console.error('Error loading inventory:', error);
+    }
+  };
+
+  // Save on-hand value to Supabase
+  const updateOnHand = async (vendor, itemName, value, unit) => {
+    const qty = value === '' ? null : parseFloat(value) || 0;
+    
+    // Update local state immediately for responsiveness
+    setInventory(prev => ({
+      ...prev,
+      [itemName]: { quantity: qty, unit, lastCounted: new Date().toISOString() }
+    }));
+
+    // Save to Supabase
+    setSavingInventory(true);
+    try {
+      const { data: existing } = await supabase
+        .from('inventory_current')
+        .select('id')
+        .eq('ingredient_name', itemName)
+        .single();
+
+      if (existing) {
+        // Update existing record
+        await supabase
+          .from('inventory_current')
+          .update({ 
+            quantity: qty, 
+            unit,
+            last_counted: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('ingredient_name', itemName);
+      } else {
+        // Insert new record
+        await supabase
+          .from('inventory_current')
+          .insert({ 
+            ingredient_name: itemName,
+            quantity: qty,
+            unit,
+            last_counted: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+      }
+    } catch (error) {
+      console.error('Error saving inventory:', error);
+    }
+    setSavingInventory(false);
+  };
+
+  // Get on-hand value for an item
+  const getOnHand = (vendor, itemName) => {
+    const inv = inventory[itemName];
+    if (!inv || inv.quantity === null) return '';
+    return inv.quantity;
+  };
+
+  // Calculate order quantity (need - on hand, minimum 0)
+  const getOrderQty = (vendor, itemName, need) => {
+    const onHand = getOnHand(vendor, itemName);
+    if (onHand === '') return need; // If no on-hand entered, order full amount
+    return Math.max(0, need - onHand);
+  };
+
+  // Clear all inventory counts
+  const clearAllOnHand = async () => {
+    if (!window.confirm('Clear all on-hand counts? This will reset inventory to uncounted.')) return;
+    
+    setSavingInventory(true);
+    try {
+      await supabase
+        .from('inventory_current')
+        .update({ quantity: null, last_counted: null })
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Update all rows
+      
+      setInventory({});
+    } catch (error) {
+      console.error('Error clearing inventory:', error);
+    }
+    setSavingInventory(false);
+  };
+
+  useEffect(() => { loadData(); loadArchivedOrders(); loadInventory(); }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -314,6 +420,13 @@ export default function ConsolidatedOrderingPage() {
       filterItemType !== 'all' ? `Type: ${filterItemType}` : ''
     ].filter(Boolean).join(' | ');
     
+    // Filter to only items that need ordering
+    const itemsToOrder = items.map(item => ({
+      ...item,
+      onHand: getOnHand(vendor, item.name),
+      orderQty: getOrderQty(vendor, item.name, item.quantity)
+    })).filter(item => item.orderQty > 0);
+    
     printWindow.document.write(`
       <html>
       <head>
@@ -328,6 +441,7 @@ export default function ConsolidatedOrderingPage() {
           .grocery { background: #fef3c7; }
           .grocery-label { color: #92400e; font-size: 11px; }
           .total { margin-top: 20px; text-align: right; font-weight: bold; }
+          .order-col { background: #eff6ff; font-weight: bold; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -341,13 +455,15 @@ export default function ConsolidatedOrderingPage() {
               <th>Item #</th>
               <th>Item Name</th>
               <th>Case Size</th>
-              <th>Qty</th>
+              <th>Need</th>
+              <th>On Hand</th>
+              <th class="order-col">Order</th>
               <th>Unit</th>
               <th>Est. Cost</th>
             </tr>
           </thead>
           <tbody>
-            ${items.map(item => `
+            ${itemsToOrder.map(item => `
               <tr class="${item.isGrocery ? 'grocery' : ''}">
                 <td>${item.itemNumber || '-'}</td>
                 <td>
@@ -356,13 +472,15 @@ export default function ConsolidatedOrderingPage() {
                 </td>
                 <td>${item.caseSize || '-'}</td>
                 <td>${item.quantity}</td>
+                <td>${item.onHand !== '' ? item.onHand : '-'}</td>
+                <td class="order-col">${item.orderQty}</td>
                 <td>${item.unit}</td>
-                <td>$${((item.unitPrice || 0) * item.quantity).toFixed(2)}</td>
+                <td>$${((item.unitPrice || 0) * item.orderQty).toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-        <div class="total">Total: $${items.reduce((sum, i) => sum + ((i.unitPrice || 0) * i.quantity), 0).toFixed(2)}</div>
+        <div class="total">Total: $${itemsToOrder.reduce((sum, i) => sum + ((i.unitPrice || 0) * i.orderQty), 0).toFixed(2)}</div>
         <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
       </body>
       </html>
@@ -454,6 +572,23 @@ export default function ConsolidatedOrderingPage() {
                 </button>
               )}
             </div>
+            
+            {/* Inventory Check Summary */}
+            {Object.keys(inventory).filter(k => inventory[k]?.quantity !== null).length > 0 && (
+              <div className="flex justify-between items-center mt-3 pt-3 border-t border-dashed border-blue-200 bg-blue-50 -mx-4 px-4 py-2">
+                <div className="text-sm text-blue-700">
+                  <span className="font-medium">📋 Inventory Check:</span> {Object.keys(inventory).filter(k => inventory[k]?.quantity !== null).length} items counted
+                  {savingInventory && <span className="ml-2 text-blue-500">(saving...)</span>}
+                </div>
+                <button 
+                  onClick={clearAllOnHand} 
+                  disabled={savingInventory}
+                  className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-100 rounded border border-blue-300 disabled:opacity-50"
+                >
+                  Clear All On Hand
+                </button>
+              </div>
+            )}
             
             {/* Filter Summary & Actions */}
             <div className="flex justify-between items-center mt-3 pt-3 border-t">
@@ -561,14 +696,20 @@ export default function ConsolidatedOrderingPage() {
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Item Name</th>
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Category</th>
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Case Size</th>
-                            <th className="text-right px-4 py-2 font-medium text-gray-600">Qty</th>
+                            <th className="text-right px-4 py-2 font-medium text-gray-600">Need</th>
+                            <th className="text-center px-4 py-2 font-medium text-gray-600">On Hand</th>
+                            <th className="text-right px-4 py-2 font-medium text-gray-600 bg-blue-50">Order</th>
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Unit</th>
                             <th className="text-right px-4 py-2 font-medium text-gray-600">Est. Cost</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {data.itemsList.map((item, idx) => (
-                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''}`}>
+                          {data.itemsList.map((item, idx) => {
+                            const orderQty = getOrderQty(vendor, item.name, item.quantity);
+                            const onHand = getOnHand(vendor, item.name);
+                            const hasOnHand = onHand !== '';
+                            return (
+                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasOnHand && orderQty === 0 ? 'opacity-50' : ''}`}>
                               <td className="px-4 py-2 font-mono text-gray-500">{item.itemNumber || '-'}</td>
                               <td className="px-4 py-2">
                                 <span className="font-medium">{item.name}</span>
@@ -579,15 +720,33 @@ export default function ConsolidatedOrderingPage() {
                               <td className="px-4 py-2 text-gray-500 text-xs">{item.subcategory || item.category}</td>
                               <td className="px-4 py-2 text-gray-600">{item.caseSize || '-'}</td>
                               <td className="px-4 py-2 text-right font-medium">{item.quantity}</td>
+                              <td className="px-4 py-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.25"
+                                  value={onHand}
+                                  onChange={(e) => updateOnHand(vendor, item.name, e.target.value, item.unit)}
+                                  placeholder="-"
+                                  className={`w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${savingInventory ? 'bg-gray-100' : ''}`}
+                                />
+                              </td>
+                              <td className={`px-4 py-2 text-right font-bold ${hasOnHand ? (orderQty > 0 ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50') : ''}`}>
+                                {orderQty}
+                              </td>
                               <td className="px-4 py-2 text-gray-600">{item.unit}</td>
-                              <td className="px-4 py-2 text-right">${((item.unitPrice || 0) * item.quantity).toFixed(2)}</td>
+                              <td className="px-4 py-2 text-right">${((item.unitPrice || 0) * orderQty).toFixed(2)}</td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                         <tfoot>
                           <tr className="bg-gray-50 font-medium">
-                            <td colSpan="6" className="px-4 py-2 text-right">Vendor Total:</td>
-                            <td className="px-4 py-2 text-right">${data.totalValue.toFixed(2)}</td>
+                            <td colSpan="8" className="px-4 py-2 text-right">Vendor Total:</td>
+                            <td className="px-4 py-2 text-right">${data.itemsList.reduce((sum, item) => {
+                              const orderQty = getOrderQty(vendor, item.name, item.quantity);
+                              return sum + ((item.unitPrice || 0) * orderQty);
+                            }, 0).toFixed(2)}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -601,11 +760,17 @@ export default function ConsolidatedOrderingPage() {
             {displayVendors.length > 0 && (
               <div className="mt-6 p-4 bg-blue-50 rounded-lg flex justify-between items-center">
                 <div>
-                  <span className="font-medium text-blue-800">Grand Total</span>
+                  <span className="font-medium text-blue-800">Grand Total (Order)</span>
                   {hasActiveFilters && <span className="ml-2 text-sm text-blue-600">(filtered)</span>}
                 </div>
                 <span className="text-2xl font-bold text-blue-800">
-                  ${Object.values(displayOrders).reduce((sum, v) => sum + (v.totalValue || 0), 0).toFixed(2)}
+                  ${Object.entries(displayOrders).reduce((sum, [vendor, v]) => {
+                    if (!v || !v.itemsList) return sum;
+                    return sum + v.itemsList.reduce((itemSum, item) => {
+                      const orderQty = getOrderQty(vendor, item.name, item.quantity);
+                      return itemSum + ((item.unitPrice || 0) * orderQty);
+                    }, 0);
+                  }, 0).toFixed(2)}
                 </span>
               </div>
             )}
