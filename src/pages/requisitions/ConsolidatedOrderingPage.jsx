@@ -31,6 +31,150 @@ const CartIcon = () => (
   </svg>
 );
 
+// ===========================================
+// EP → AP CONVERSION UTILITIES
+// ===========================================
+
+// Parse pack_size string to extract case info
+// Formats: "6/30OZ", "15LB", "24ea", "6/#10", "750ML", "2/5LB"
+const parsePackSize = (packSize) => {
+  if (!packSize) return null;
+  
+  const normalized = packSize.toUpperCase().trim();
+  
+  // Format: "6/30OZ" or "6/30 OZ" (count/size unit)
+  let match = normalized.match(/^(\d+)\/(\d+\.?\d*)\s*(OZ|LB|GAL|QT|PT|ML|L|CT|EA)?$/);
+  if (match) {
+    return {
+      unitsPerCase: parseFloat(match[1]),
+      unitSize: parseFloat(match[2]),
+      unitType: match[3] || 'EA',
+      totalVolume: parseFloat(match[1]) * parseFloat(match[2]),
+      format: 'multi'
+    };
+  }
+  
+  // Format: "6/#10" (#10 cans)
+  match = normalized.match(/^(\d+)\/#(\d+)$/);
+  if (match) {
+    // #10 can ≈ 96 oz, #5 can ≈ 56 oz
+    const canSizes = { '10': 96, '5': 56, '2': 20, '1': 10 };
+    const canOz = canSizes[match[2]] || 96;
+    return {
+      unitsPerCase: parseFloat(match[1]),
+      unitSize: canOz,
+      unitType: 'OZ',
+      totalVolume: parseFloat(match[1]) * canOz,
+      format: 'cans'
+    };
+  }
+  
+  // Format: "15LB" or "750ML" (single unit case)
+  match = normalized.match(/^(\d+\.?\d*)\s*(OZ|LB|GAL|QT|PT|ML|L|CT|EA|PK)$/);
+  if (match) {
+    return {
+      unitsPerCase: 1,
+      unitSize: parseFloat(match[1]),
+      unitType: match[2],
+      totalVolume: parseFloat(match[1]),
+      format: 'single'
+    };
+  }
+  
+  // Format: "24ea" or "200ea" (count only)
+  match = normalized.match(/^(\d+)\s*(EA|CT|PK)$/);
+  if (match) {
+    return {
+      unitsPerCase: parseFloat(match[1]),
+      unitSize: 1,
+      unitType: 'EA',
+      totalVolume: parseFloat(match[1]),
+      format: 'count'
+    };
+  }
+  
+  return null;
+};
+
+// Convert units to a common base (oz for weight/volume, ea for count)
+const convertToBase = (qty, unit) => {
+  const u = (unit || '').toLowerCase().trim();
+  
+  // Weight conversions (to oz)
+  if (u === 'lb' || u === 'lbs') return { value: qty * 16, baseUnit: 'oz' };
+  if (u === 'oz') return { value: qty, baseUnit: 'oz' };
+  if (u === 'g') return { value: qty * 0.035274, baseUnit: 'oz' };
+  if (u === 'kg') return { value: qty * 35.274, baseUnit: 'oz' };
+  
+  // Volume conversions (to fl oz)
+  if (u === 'gal' || u === 'gallon') return { value: qty * 128, baseUnit: 'floz' };
+  if (u === 'qt' || u === 'quart') return { value: qty * 32, baseUnit: 'floz' };
+  if (u === 'pt' || u === 'pint') return { value: qty * 16, baseUnit: 'floz' };
+  if (u === 'cup' || u === 'cups' || u === 'c') return { value: qty * 8, baseUnit: 'floz' };
+  if (u === 'fl oz' || u === 'floz') return { value: qty, baseUnit: 'floz' };
+  if (u === 'tbsp') return { value: qty * 0.5, baseUnit: 'floz' };
+  if (u === 'tsp') return { value: qty * 0.167, baseUnit: 'floz' };
+  if (u === 'ml') return { value: qty * 0.033814, baseUnit: 'floz' };
+  if (u === 'l' || u === 'liter') return { value: qty * 33.814, baseUnit: 'floz' };
+  
+  // Count (already in base)
+  if (u === 'ea' || u === 'each' || u === 'ct' || u === 'pk' || u === 'dz' || u === 'dozen') {
+    const multiplier = (u === 'dz' || u === 'dozen') ? 12 : 1;
+    return { value: qty * multiplier, baseUnit: 'ea' };
+  }
+  
+  // Default: treat as count
+  return { value: qty, baseUnit: 'ea' };
+};
+
+// Get AP case quantity needed for EP requirement
+const calculateAPOrder = (epQty, epUnit, packSize) => {
+  const parsed = parsePackSize(packSize);
+  if (!parsed) {
+    return { 
+      casesNeeded: null, 
+      apUnit: 'case',
+      caseSize: packSize || 'N/A',
+      epConverted: epQty
+    };
+  }
+  
+  // Convert EP quantity to base unit
+  const epBase = convertToBase(epQty, epUnit);
+  
+  // Convert case total to base unit
+  const caseBase = convertToBase(parsed.totalVolume, parsed.unitType);
+  
+  // If units are compatible (both weight or both volume or both count)
+  if (epBase.baseUnit === caseBase.baseUnit || 
+      (epBase.baseUnit === 'oz' && caseBase.baseUnit === 'oz') ||
+      (epBase.baseUnit === 'floz' && caseBase.baseUnit === 'floz') ||
+      (epBase.baseUnit === 'ea' && caseBase.baseUnit === 'ea')) {
+    
+    const casesNeeded = Math.ceil(epBase.value / caseBase.value);
+    return {
+      casesNeeded,
+      apUnit: 'case',
+      caseSize: packSize,
+      epConverted: epBase.value,
+      caseVolume: caseBase.value
+    };
+  }
+  
+  // Units not compatible - just return EP qty and flag it
+  return {
+    casesNeeded: null,
+    apUnit: epUnit,
+    caseSize: packSize,
+    epConverted: epQty,
+    incompatible: true
+  };
+};
+
+// ===========================================
+// END EP → AP CONVERSION UTILITIES
+// ===========================================
+
 // Categories that are perishable (short shelf life)
 const PERISHABLE_CATEGORIES = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery & Bread'];
 const NON_PERISHABLE_CATEGORIES = ['Pantry', 'Beverages', 'Wine & Spirits', 'Production Items', 'Frozen Foods'];
@@ -96,13 +240,14 @@ export default function ConsolidatedOrderingPage() {
   const [selectedArchive, setSelectedArchive] = useState(null);
   
   // New filter states
-  const [filterWeek, setFilterWeek] = useState('all');
+  const [filterWeek, setFilterWeek] = useState('next'); // Default to NEXT week
   const [filterInstructor, setFilterInstructor] = useState('all');
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterItemType, setFilterItemType] = useState('all'); // all, perishable, non-perishable
   const [showGroceryOnly, setShowGroceryOnly] = useState(false);
   const [inventory, setInventory] = useState({}); // Track on-hand inventory from Supabase
   const [savingInventory, setSavingInventory] = useState(false);
+  const [onHandMode, setOnHandMode] = useState(false); // Simplified On-Hand entry mode
 
   // Load inventory from Supabase
   const loadInventory = async () => {
@@ -281,11 +426,23 @@ export default function ConsolidatedOrderingPage() {
   const filteredRequisitions = useMemo(() => {
     return requisitions.filter(req => {
       // Week filter
-      // Week filter - compare by Monday ISO date key
       if (filterWeek !== "all" && req.class_date) {
         const { start } = getWeekRange(req.class_date);
         const reqWeekKey = start.toISOString().split("T")[0];
-        if (reqWeekKey !== filterWeek) return false;
+        
+        // Handle "next" week filter - calculate next Monday
+        if (filterWeek === "next") {
+          const today = new Date();
+          const dayOfWeek = today.getDay();
+          const daysUntilNextMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+          const nextMonday = new Date(today);
+          nextMonday.setDate(today.getDate() + daysUntilNextMonday);
+          nextMonday.setHours(0, 0, 0, 0);
+          const nextMondayKey = nextMonday.toISOString().split("T")[0];
+          if (reqWeekKey !== nextMondayKey) return false;
+        } else {
+          if (reqWeekKey !== filterWeek) return false;
+        }
       }
       
       // Instructor filter
@@ -332,7 +489,7 @@ export default function ConsolidatedOrderingPage() {
             quantity: 0,
             itemNumber: ing.vendor_code || '',
             caseSize: ing.pack_size || '',
-            price: ing.case_price || 0,
+            casePrice: ing.case_price || 0,
             unitPrice: ing.unit_price || 0,
             category: category,
             subcategory: ing.subcategory || '',
@@ -383,6 +540,40 @@ export default function ConsolidatedOrderingPage() {
     return vendorMap;
   }, [filteredRequisitions, ingMap, filterItemType, showGroceryOnly]);
 
+  // Consolidate items by Category for On-Hand mode
+  const consolidateByCategory = useMemo(() => {
+    const categoryMap = {};
+    
+    // Flatten all items from all vendors
+    Object.values(consolidateByVendor).forEach(vendorData => {
+      vendorData.itemsList.forEach(item => {
+        const category = item.category || 'Other';
+        if (!categoryMap[category]) {
+          categoryMap[category] = { items: [], totalItems: 0 };
+        }
+        
+        // Check if item already exists in this category
+        const existing = categoryMap[category].items.find(i => i.name === item.name);
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          categoryMap[category].items.push({ ...item });
+        }
+      });
+    });
+    
+    // Sort items within each category and calculate totals
+    Object.keys(categoryMap).forEach(cat => {
+      categoryMap[cat].items.sort((a, b) => a.name.localeCompare(b.name));
+      categoryMap[cat].totalItems = categoryMap[cat].items.length;
+    });
+    
+    return categoryMap;
+  }, [consolidateByVendor]);
+
+  // Define category order for On-Hand mode (matches storage locations)
+  const categoryOrder = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery & Bread', 'Frozen', 'Pantry', 'Beverages', 'Wine & Spirits', 'Other'];
+
   const saveToArchive = () => {
     const archiveEntry = {
       id: Date.now(),
@@ -420,12 +611,24 @@ export default function ConsolidatedOrderingPage() {
       filterItemType !== 'all' ? `Type: ${filterItemType}` : ''
     ].filter(Boolean).join(' | ');
     
-    // Filter to only items that need ordering
-    const itemsToOrder = items.map(item => ({
-      ...item,
-      onHand: getOnHand(vendor, item.name),
-      orderQty: getOrderQty(vendor, item.name, item.quantity)
-    })).filter(item => item.orderQty > 0);
+    // Calculate AP order quantities and filter to items that need ordering
+    const itemsToOrder = items.map(item => {
+      const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+      // Minimum 1 case even if EP need is tiny
+      const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+      const onHand = getOnHand(vendor, item.name);
+      const hasOnHand = onHand !== '';
+      const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
+      const casePrice = item.casePrice || item.unitPrice || 0;
+      
+      return {
+        ...item,
+        casesNeeded,
+        onHand: hasOnHand ? onHand : '-',
+        orderCases,
+        estCost: orderCases * casePrice
+      };
+    }).filter(item => item.orderCases > 0);
     
     printWindow.document.write(`
       <html>
@@ -440,8 +643,9 @@ export default function ConsolidatedOrderingPage() {
           th { background: #f3f4f6; }
           .grocery { background: #fef3c7; }
           .grocery-label { color: #92400e; font-size: 11px; }
-          .total { margin-top: 20px; text-align: right; font-weight: bold; }
+          .total { margin-top: 20px; text-align: right; font-weight: bold; font-size: 18px; }
           .order-col { background: #eff6ff; font-weight: bold; }
+          .ep-need { color: #666; font-size: 12px; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -454,11 +658,10 @@ export default function ConsolidatedOrderingPage() {
             <tr>
               <th>Item #</th>
               <th>Item Name</th>
-              <th>Case Size</th>
-              <th>Need</th>
+              <th>EP Need</th>
+              <th>Case/Pack</th>
               <th>On Hand</th>
-              <th class="order-col">Order</th>
-              <th>Unit</th>
+              <th class="order-col">Order (Cases)</th>
               <th>Est. Cost</th>
             </tr>
           </thead>
@@ -470,17 +673,16 @@ export default function ConsolidatedOrderingPage() {
                   ${item.name}
                   ${item.isGrocery ? '<br><span class="grocery-label">🛒 Consider grocery store</span>' : ''}
                 </td>
-                <td>${item.caseSize || '-'}</td>
-                <td>${item.quantity}</td>
-                <td>${item.onHand !== '' ? item.onHand : '-'}</td>
-                <td class="order-col">${item.orderQty}</td>
-                <td>${item.unit}</td>
-                <td>$${((item.unitPrice || 0) * item.orderQty).toFixed(2)}</td>
+                <td class="ep-need">${item.quantity} ${item.unit}</td>
+                <td>${item.caseSize || '-'}<br><span class="ep-need">= ${item.casesNeeded} case${item.casesNeeded !== 1 ? 's' : ''}</span></td>
+                <td>${item.onHand}</td>
+                <td class="order-col">${item.orderCases}</td>
+                <td>$${item.estCost.toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-        <div class="total">Total: $${itemsToOrder.reduce((sum, i) => sum + ((i.unitPrice || 0) * i.orderQty), 0).toFixed(2)}</div>
+        <div class="total">Total: $${itemsToOrder.reduce((sum, i) => sum + i.estCost, 0).toFixed(2)}</div>
         <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
       </body>
       </html>
@@ -518,8 +720,9 @@ export default function ConsolidatedOrderingPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => { setViewMode('current'); setSelectedArchive(null); }} className={`px-4 py-2 rounded font-medium transition-colors ${viewMode === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Current</button>
-            <button onClick={() => setViewMode('archive')} className={`px-4 py-2 rounded font-medium transition-colors flex items-center gap-2 ${viewMode === 'archive' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}><ArchiveIcon />Archive ({archivedOrders.length})</button>
+            <button onClick={() => { setViewMode('current'); setSelectedArchive(null); setOnHandMode(false); }} className={`px-4 py-2 rounded font-medium transition-colors ${viewMode === 'current' && !onHandMode ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Orders</button>
+            <button onClick={() => { setViewMode('current'); setSelectedArchive(null); setOnHandMode(true); }} className={`px-4 py-2 rounded font-medium transition-colors ${onHandMode ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>📋 On-Hand</button>
+            <button onClick={() => { setViewMode('archive'); setOnHandMode(false); }} className={`px-4 py-2 rounded font-medium transition-colors flex items-center gap-2 ${viewMode === 'archive' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}><ArchiveIcon />Archive ({archivedOrders.length})</button>
           </div>
         </div>
 
@@ -530,7 +733,8 @@ export default function ConsolidatedOrderingPage() {
               <label className="text-sm font-medium text-gray-600">Filters:</label>
               
               {/* Week Filter */}
-              <select value={filterWeek} onChange={(e) => setFilterWeek(e.target.value)} className="px-3 py-2 border rounded-lg text-sm">
+              <select value={filterWeek} onChange={(e) => setFilterWeek(e.target.value)} className="px-3 py-2 border rounded-lg text-sm font-medium">
+                <option value="next">📅 Next Week</option>
                 <option value="all">All Weeks</option>
                 {filterOptions.weeks.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
               </select>
@@ -656,7 +860,7 @@ export default function ConsolidatedOrderingPage() {
         )}
 
         {/* Orders Display */}
-        {(viewMode === 'current' || selectedArchive) && (
+        {(viewMode === 'current' || selectedArchive) && !onHandMode && (
           <>
             {displayVendors.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
@@ -694,22 +898,33 @@ export default function ConsolidatedOrderingPage() {
                           <tr className="bg-gray-50 border-b">
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Item #</th>
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Item Name</th>
-                            <th className="text-left px-4 py-2 font-medium text-gray-600">Category</th>
-                            <th className="text-left px-4 py-2 font-medium text-gray-600">Case Size</th>
-                            <th className="text-right px-4 py-2 font-medium text-gray-600">Need</th>
+                            <th className="text-left px-4 py-2 font-medium text-gray-600">EP Need</th>
+                            <th className="text-left px-4 py-2 font-medium text-gray-600">Case/Pack</th>
                             <th className="text-center px-4 py-2 font-medium text-gray-600">On Hand</th>
                             <th className="text-right px-4 py-2 font-medium text-gray-600 bg-blue-50">Order</th>
-                            <th className="text-left px-4 py-2 font-medium text-gray-600">Unit</th>
                             <th className="text-right px-4 py-2 font-medium text-gray-600">Est. Cost</th>
                           </tr>
                         </thead>
                         <tbody>
                           {data.itemsList.map((item, idx) => {
-                            const orderQty = getOrderQty(vendor, item.name, item.quantity);
+                            // Calculate AP conversion
+                            const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                            // Minimum 1 case even if EP need is tiny
+                            const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                            
+                            // Get on-hand (in cases/AP units)
                             const onHand = getOnHand(vendor, item.name);
                             const hasOnHand = onHand !== '';
+                            
+                            // Calculate order qty (cases needed - on hand cases)
+                            const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
+                            
+                            // Estimate cost based on case price
+                            const casePrice = item.casePrice || item.unitPrice || 0;
+                            const estCost = orderCases * casePrice;
+                            
                             return (
-                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasOnHand && orderQty === 0 ? 'opacity-50' : ''}`}>
+                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasOnHand && orderCases === 0 ? 'opacity-50' : ''}`}>
                               <td className="px-4 py-2 font-mono text-gray-500">{item.itemNumber || '-'}</td>
                               <td className="px-4 py-2">
                                 <span className="font-medium">{item.name}</span>
@@ -717,35 +932,48 @@ export default function ConsolidatedOrderingPage() {
                                   <span className="ml-2 text-amber-600 text-xs"><CartIcon /> Grocery</span>
                                 )}
                               </td>
-                              <td className="px-4 py-2 text-gray-500 text-xs">{item.subcategory || item.category}</td>
-                              <td className="px-4 py-2 text-gray-600">{item.caseSize || '-'}</td>
-                              <td className="px-4 py-2 text-right font-medium">{item.quantity}</td>
+                              <td className="px-4 py-2 text-gray-600">
+                                <span className="font-medium">{item.quantity}</span>
+                                <span className="text-gray-400 ml-1">{item.unit}</span>
+                              </td>
+                              <td className="px-4 py-2 text-gray-600 text-xs">
+                                {item.caseSize || '-'}
+                                {apCalc.casesNeeded && (
+                                  <div className="text-blue-600">= {casesNeeded} case{casesNeeded !== 1 ? 's' : ''}</div>
+                                )}
+                              </td>
                               <td className="px-4 py-2 text-center">
                                 <input
                                   type="number"
                                   min="0"
-                                  step="0.25"
+                                  step="1"
                                   value={onHand}
-                                  onChange={(e) => updateOnHand(vendor, item.name, e.target.value, item.unit)}
+                                  onChange={(e) => updateOnHand(vendor, item.name, e.target.value, 'case')}
                                   placeholder="-"
                                   className={`w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${savingInventory ? 'bg-gray-100' : ''}`}
                                 />
+                                <div className="text-xs text-gray-400">cases</div>
                               </td>
-                              <td className={`px-4 py-2 text-right font-bold ${hasOnHand ? (orderQty > 0 ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50') : ''}`}>
-                                {orderQty}
+                              <td className={`px-4 py-2 text-right font-bold ${hasOnHand ? (orderCases > 0 ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50') : ''}`}>
+                                {orderCases}
+                                <div className="text-xs font-normal text-gray-400">cases</div>
                               </td>
-                              <td className="px-4 py-2 text-gray-600">{item.unit}</td>
-                              <td className="px-4 py-2 text-right">${((item.unitPrice || 0) * orderQty).toFixed(2)}</td>
+                              <td className="px-4 py-2 text-right">${estCost.toFixed(2)}</td>
                             </tr>
                             );
                           })}
                         </tbody>
                         <tfoot>
                           <tr className="bg-gray-50 font-medium">
-                            <td colSpan="8" className="px-4 py-2 text-right">Vendor Total:</td>
+                            <td colSpan="6" className="px-4 py-2 text-right">Vendor Total:</td>
                             <td className="px-4 py-2 text-right">${data.itemsList.reduce((sum, item) => {
-                              const orderQty = getOrderQty(vendor, item.name, item.quantity);
-                              return sum + ((item.unitPrice || 0) * orderQty);
+                              const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                              const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                              const onHand = getOnHand(vendor, item.name);
+                              const hasOnHand = onHand !== '';
+                              const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
+                              const casePrice = item.casePrice || item.unitPrice || 0;
+                              return sum + (orderCases * casePrice);
                             }, 0).toFixed(2)}</td>
                           </tr>
                         </tfoot>
@@ -767,14 +995,138 @@ export default function ConsolidatedOrderingPage() {
                   ${Object.entries(displayOrders).reduce((sum, [vendor, v]) => {
                     if (!v || !v.itemsList) return sum;
                     return sum + v.itemsList.reduce((itemSum, item) => {
-                      const orderQty = getOrderQty(vendor, item.name, item.quantity);
-                      return itemSum + ((item.unitPrice || 0) * orderQty);
+                      const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                      const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                      const onHand = getOnHand(vendor, item.name);
+                      const hasOnHand = onHand !== '';
+                      const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
+                      const casePrice = item.casePrice || item.unitPrice || 0;
+                      return itemSum + (orderCases * casePrice);
                     }, 0);
                   }, 0).toFixed(2)}
                 </span>
               </div>
             )}
           </>
+        )}
+
+        {/* On-Hand Mode - Simplified view by Category */}
+        {viewMode === 'current' && onHandMode && (
+          <div className="space-y-6">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <h2 className="text-lg font-semibold text-green-800 mb-2">📋 On-Hand Entry Mode</h2>
+              <p className="text-green-700">Walk through storage areas and enter current inventory counts (in cases/packs).</p>
+            </div>
+            
+            {categoryOrder.filter(cat => consolidateByCategory[cat]).map(category => {
+              const catData = consolidateByCategory[category];
+              if (!catData || catData.items.length === 0) return null;
+              
+              // Category colors
+              const catColors = {
+                'Produce': 'bg-green-100 border-green-300',
+                'Dairy & Eggs': 'bg-yellow-100 border-yellow-300',
+                'Meat & Seafood': 'bg-red-100 border-red-300',
+                'Bakery & Bread': 'bg-amber-100 border-amber-300',
+                'Frozen': 'bg-blue-100 border-blue-300',
+                'Pantry': 'bg-orange-100 border-orange-300',
+                'Beverages': 'bg-purple-100 border-purple-300',
+                'Wine & Spirits': 'bg-pink-100 border-pink-300',
+              };
+              const catColor = catColors[category] || 'bg-gray-100 border-gray-300';
+              
+              return (
+                <div key={category} className={`border-2 rounded-lg overflow-hidden ${catColor}`}>
+                  <div className="px-4 py-3">
+                    <h2 className="text-xl font-bold text-gray-800">{category}</h2>
+                    <p className="text-sm text-gray-600">{catData.items.length} items</p>
+                  </div>
+                  <div className="bg-white">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50 border-b">
+                          <th className="text-left px-4 py-3 font-semibold text-gray-700 text-base">Item</th>
+                          <th className="text-left px-4 py-3 font-semibold text-gray-700 text-base">EP Need</th>
+                          <th className="text-left px-4 py-3 font-semibold text-gray-700 text-base">Case/Pack</th>
+                          <th className="text-center px-4 py-3 font-semibold text-gray-700 text-base w-32">On Hand</th>
+                          <th className="text-right px-4 py-3 font-semibold text-gray-700 text-base bg-blue-50 w-24">Order</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {catData.items.map((item, idx) => {
+                          // Calculate AP conversion
+                          const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                          // Minimum 1 case even if EP need is tiny
+                          const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                          
+                          // Get on-hand (in cases/AP units)
+                          const onHand = getOnHand(category, item.name);
+                          const hasOnHand = onHand !== '';
+                          
+                          // Calculate order qty (cases needed - on hand cases)
+                          const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
+                          
+                          return (
+                            <tr key={idx} className={`border-b ${hasOnHand && orderCases === 0 ? 'bg-green-50 opacity-60' : ''}`}>
+                              <td className="px-4 py-3">
+                                <span className="font-medium text-base">{item.name}</span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600">
+                                <span className="text-base">{item.quantity}</span>
+                                <span className="text-gray-400 ml-1 text-sm">{item.unit}</span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 text-sm">
+                                {item.caseSize || '-'}
+                                {apCalc.casesNeeded && (
+                                  <div className="text-blue-600 font-medium">= {casesNeeded} case{casesNeeded !== 1 ? 's' : ''}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={onHand}
+                                  onChange={(e) => updateOnHand(category, item.name, e.target.value, 'case')}
+                                  placeholder="0"
+                                  className={`w-20 px-3 py-2 text-center text-lg border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 ${savingInventory ? 'bg-gray-100' : 'bg-white'}`}
+                                />
+                              </td>
+                              <td className={`px-4 py-3 text-right text-lg font-bold ${hasOnHand ? (orderCases > 0 ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50') : 'text-gray-700'}`}>
+                                {orderCases}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {/* Summary in On-Hand Mode */}
+            <div className="mt-6 p-4 bg-blue-100 rounded-lg">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="font-semibold text-blue-800 text-lg">Total Items to Order</span>
+                  <span className="ml-2 text-blue-600">(after inventory check)</span>
+                </div>
+                <span className="text-3xl font-bold text-blue-800">
+                  {Object.entries(consolidateByCategory).reduce((sum, [catName, cat]) => {
+                    return sum + cat.items.reduce((itemSum, item) => {
+                      const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                      const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                      const onHand = getOnHand(catName, item.name);
+                      const hasOnHand = onHand !== '';
+                      const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
+                      return itemSum + orderCases;
+                    }, 0);
+                  }, 0)} cases
+                </span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
