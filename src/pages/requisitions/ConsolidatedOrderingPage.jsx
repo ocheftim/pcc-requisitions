@@ -248,7 +248,7 @@ export default function ConsolidatedOrderingPage() {
   const [inventory, setInventory] = useState({}); // Track on-hand inventory from Supabase
   const [savingInventory, setSavingInventory] = useState(false);
   const [orderOverrides, setOrderOverrides] = useState({}); // Manual order qty overrides
-  const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category'
+  const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category' // Manual order qty overrides
 
   // Load inventory from Supabase
   const loadInventory = async () => {
@@ -822,8 +822,6 @@ export default function ConsolidatedOrderingPage() {
                 📦 Category
               </button>
             </div>
-            </div>
-            
             {/* Filter Summary & Actions */}
             <div className="flex justify-between items-center mt-3 pt-3 border-t">
               <div className="text-sm text-gray-600">
