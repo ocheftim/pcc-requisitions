@@ -620,13 +620,15 @@ export default function ConsolidatedOrderingPage() {
       const hasOnHand = onHand !== '';
       const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
       const casePrice = item.casePrice || item.unitPrice || 0;
+      const isUnit = item.caseSize?.startsWith('1/');
       
       return {
         ...item,
         casesNeeded,
         onHand: hasOnHand ? onHand : '-',
         orderCases,
-        estCost: orderCases * casePrice
+        estCost: orderCases * casePrice,
+        isUnit
       };
     }).filter(item => item.orderCases > 0);
     
@@ -659,9 +661,9 @@ export default function ConsolidatedOrderingPage() {
               <th>Item #</th>
               <th>Item Name</th>
               <th>EP Need</th>
-              <th>Case/Pack</th>
+              <th>Pack Size</th>
               <th>On Hand</th>
-              <th class="order-col">Order (Cases)</th>
+              <th class="order-col">Order</th>
               <th>Est. Cost</th>
             </tr>
           </thead>
@@ -674,9 +676,9 @@ export default function ConsolidatedOrderingPage() {
                   ${item.isGrocery ? '<br><span class="grocery-label">🛒 Consider grocery store</span>' : ''}
                 </td>
                 <td class="ep-need">${item.quantity} ${item.unit}</td>
-                <td>${item.caseSize || '-'}<br><span class="ep-need">= ${item.casesNeeded} case${item.casesNeeded !== 1 ? 's' : ''}</span></td>
-                <td>${item.onHand}</td>
-                <td class="order-col">${item.orderCases}</td>
+                <td>${item.caseSize || '-'}<br><span class="ep-need">${item.isUnit ? `Min: ${item.casesNeeded}` : `= ${item.casesNeeded} case${item.casesNeeded !== 1 ? 's' : ''}`}</span></td>
+                <td>${item.onHand} ${item.isUnit ? 'units' : 'cases'}</td>
+                <td class="order-col">${item.orderCases} ${item.isUnit ? 'units' : 'cases'}</td>
                 <td>$${item.estCost.toFixed(2)}</td>
               </tr>
             `).join('')}
@@ -899,7 +901,7 @@ export default function ConsolidatedOrderingPage() {
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Item #</th>
                             <th className="text-left px-4 py-2 font-medium text-gray-600">Item Name</th>
                             <th className="text-left px-4 py-2 font-medium text-gray-600">EP Need</th>
-                            <th className="text-left px-4 py-2 font-medium text-gray-600">Case/Pack</th>
+                            <th className="text-left px-4 py-2 font-medium text-gray-600">Pack Size</th>
                             <th className="text-center px-4 py-2 font-medium text-gray-600">On Hand</th>
                             <th className="text-right px-4 py-2 font-medium text-gray-600 bg-blue-50">Order</th>
                             <th className="text-right px-4 py-2 font-medium text-gray-600">Est. Cost</th>
@@ -939,7 +941,9 @@ export default function ConsolidatedOrderingPage() {
                               <td className="px-4 py-2 text-gray-600 text-xs">
                                 {item.caseSize || '-'}
                                 {apCalc.casesNeeded && (
-                                  <div className="text-blue-600">= {casesNeeded} case{casesNeeded !== 1 ? 's' : ''}</div>
+                                  <div className="text-blue-600">
+                                    {item.caseSize?.startsWith('1/') ? `Min: ${casesNeeded}` : `= ${casesNeeded} case${casesNeeded !== 1 ? 's' : ''}`}
+                                  </div>
                                 )}
                               </td>
                               <td className="px-4 py-2 text-center">
@@ -952,11 +956,15 @@ export default function ConsolidatedOrderingPage() {
                                   placeholder="-"
                                   className={`w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${savingInventory ? 'bg-gray-100' : ''}`}
                                 />
-                                <div className="text-xs text-gray-400">cases</div>
+                                <div className="text-xs text-gray-400">
+                                  {item.caseSize?.startsWith('1/') ? 'units' : 'cases'}
+                                </div>
                               </td>
                               <td className={`px-4 py-2 text-right font-bold ${hasOnHand ? (orderCases > 0 ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50') : ''}`}>
                                 {orderCases}
-                                <div className="text-xs font-normal text-gray-400">cases</div>
+                                <div className="text-xs font-normal text-gray-400">
+                                  {item.caseSize?.startsWith('1/') ? 'units' : 'cases'}
+                                </div>
                               </td>
                               <td className="px-4 py-2 text-right">${estCost.toFixed(2)}</td>
                             </tr>
@@ -1078,7 +1086,9 @@ export default function ConsolidatedOrderingPage() {
                               <td className="px-4 py-3 text-gray-600 text-sm">
                                 {item.caseSize || '-'}
                                 {apCalc.casesNeeded && (
-                                  <div className="text-blue-600 font-medium">= {casesNeeded} case{casesNeeded !== 1 ? 's' : ''}</div>
+                                  <div className="text-blue-600 font-medium">
+                                    {item.caseSize?.startsWith('1/') ? `Min: ${casesNeeded}` : `= ${casesNeeded} case${casesNeeded !== 1 ? 's' : ''}`}
+                                  </div>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-center">
@@ -1091,9 +1101,15 @@ export default function ConsolidatedOrderingPage() {
                                   placeholder="0"
                                   className={`w-20 px-3 py-2 text-center text-lg border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 ${savingInventory ? 'bg-gray-100' : 'bg-white'}`}
                                 />
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {item.caseSize?.startsWith('1/') ? 'units' : 'cases'}
+                                </div>
                               </td>
                               <td className={`px-4 py-3 text-right text-lg font-bold ${hasOnHand ? (orderCases > 0 ? 'text-blue-600 bg-blue-50' : 'text-green-600 bg-green-50') : 'text-gray-700'}`}>
                                 {orderCases}
+                                <div className="text-xs font-normal text-gray-400">
+                                  {item.caseSize?.startsWith('1/') ? 'units' : 'cases'}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1109,20 +1125,20 @@ export default function ConsolidatedOrderingPage() {
             <div className="mt-6 p-4 bg-blue-100 rounded-lg">
               <div className="flex justify-between items-center">
                 <div>
-                  <span className="font-semibold text-blue-800 text-lg">Total Items to Order</span>
+                  <span className="font-semibold text-blue-800 text-lg">Items Needing Order</span>
                   <span className="ml-2 text-blue-600">(after inventory check)</span>
                 </div>
                 <span className="text-3xl font-bold text-blue-800">
                   {Object.entries(consolidateByCategory).reduce((sum, [catName, cat]) => {
-                    return sum + cat.items.reduce((itemSum, item) => {
+                    return sum + cat.items.filter(item => {
                       const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
                       const casesNeeded = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
                       const onHand = getOnHand(catName, item.name);
                       const hasOnHand = onHand !== '';
                       const orderCases = hasOnHand ? Math.max(0, casesNeeded - onHand) : casesNeeded;
-                      return itemSum + orderCases;
-                    }, 0);
-                  }, 0)} cases
+                      return orderCases > 0;
+                    }).length;
+                  }, 0)} items
                 </span>
               </div>
             </div>
