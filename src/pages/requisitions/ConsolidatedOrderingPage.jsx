@@ -248,7 +248,7 @@ export default function ConsolidatedOrderingPage() {
   const [inventory, setInventory] = useState({}); // Track on-hand inventory from Supabase
   const [savingInventory, setSavingInventory] = useState(false);
   const [orderOverrides, setOrderOverrides] = useState({}); // Manual order qty overrides
-  const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category' // Manual order qty overrides
+  const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category'
 
   // Load inventory from Supabase
   const loadInventory = async () => {
@@ -822,6 +822,7 @@ export default function ConsolidatedOrderingPage() {
                 📦 Category
               </button>
             </div>
+            
             {/* Filter Summary & Actions */}
             <div className="flex justify-between items-center mt-3 pt-3 border-t">
               <div className="text-sm text-gray-600">
@@ -953,12 +954,13 @@ export default function ConsolidatedOrderingPage() {
                               effectiveOrder = Math.max(0, calculatedOrder - onHand);
                             }
                             
-                            // Estimate cost based on case price
+                            // Estimate cost based on case price - only show if On Hand or Order has been set
                             const casePrice = item.casePrice || item.unitPrice || 0;
-                            const estCost = effectiveOrder * casePrice;
+                            const hasInput = onHand !== '' || orderOverride !== '';
+                            const estCost = hasInput ? effectiveOrder * casePrice : null;
                             
                             return (
-                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${effectiveOrder === 0 ? 'opacity-50' : ''}`}>
+                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasInput && effectiveOrder === 0 ? 'opacity-50' : ''}`}>
                               <td className="px-4 py-2 font-mono text-gray-500">{item.itemNumber || '-'}</td>
                               <td className="px-4 py-2">
                                 <span className="font-medium">{item.name}</span>
@@ -975,27 +977,36 @@ export default function ConsolidatedOrderingPage() {
                               </td>
                               <td className="px-4 py-2 text-center">
                                 <input
-                                  type="number"
-                                  min="0"
-                                  step="1"
+                                  type="text"
+                                  inputMode="numeric"
                                   value={onHand}
-                                  onChange={(e) => updateOnHand(vendor, item.name, e.target.value, 'case')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*$/.test(val)) {
+                                      updateOnHand(vendor, item.name, val, 'case');
+                                    }
+                                  }}
                                   placeholder="-"
                                   className="w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                                 />
                               </td>
                               <td className="px-4 py-2 text-center bg-blue-50">
                                 <input
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={orderOverride !== '' ? orderOverride : effectiveOrder}
-                                  onChange={(e) => setOrderOverride(vendor, item.name, e.target.value)}
-                                  className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${effectiveOrder > 0 ? 'text-blue-600' : 'text-green-600'}`}
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={orderOverride !== '' ? orderOverride : (hasInput ? effectiveOrder : '')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*$/.test(val)) {
+                                      setOrderOverride(vendor, item.name, val);
+                                    }
+                                  }}
+                                  placeholder="-"
+                                  className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
                                 />
                                 <div className="text-xs text-gray-400">{isUnit ? '' : 'cases'}</div>
                               </td>
-                              <td className="px-4 py-2 text-right">${estCost.toFixed(2)}</td>
+                              <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
                             </tr>
                             );
                           })}
@@ -1003,17 +1014,26 @@ export default function ConsolidatedOrderingPage() {
                         <tfoot>
                           <tr className="bg-gray-50 font-medium">
                             <td colSpan="6" className="px-4 py-2 text-right">Vendor Total:</td>
-                            <td className="px-4 py-2 text-right">${data.itemsList.reduce((sum, item) => {
-                              const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
-                              const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
-                              const onHand = getOnHand(vendor, item.name);
-                              const orderOverride = getOrderOverride(vendor, item.name);
-                              let effectiveOrder = calculatedOrder;
-                              if (orderOverride !== '') effectiveOrder = orderOverride;
-                              else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
-                              const casePrice = item.casePrice || item.unitPrice || 0;
-                              return sum + (effectiveOrder * casePrice);
-                            }, 0).toFixed(2)}</td>
+                            <td className="px-4 py-2 text-right">{(() => {
+                              let total = 0;
+                              let hasAnyInput = false;
+                              data.itemsList.forEach(item => {
+                                const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                                const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                                const onHand = getOnHand(vendor, item.name);
+                                const orderOverride = getOrderOverride(vendor, item.name);
+                                const hasInput = onHand !== '' || orderOverride !== '';
+                                if (hasInput) {
+                                  hasAnyInput = true;
+                                  let effectiveOrder = calculatedOrder;
+                                  if (orderOverride !== '') effectiveOrder = orderOverride;
+                                  else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
+                                  const casePrice = item.casePrice || item.unitPrice || 0;
+                                  total += effectiveOrder * casePrice;
+                                }
+                              });
+                              return hasAnyInput ? `$${total.toFixed(2)}` : '-';
+                            })()}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -1076,10 +1096,11 @@ export default function ConsolidatedOrderingPage() {
                               }
                               
                               const casePrice = item.casePrice || item.unitPrice || 0;
-                              const estCost = effectiveOrder * casePrice;
+                              const hasInput = onHand !== '' || orderOverride !== '';
+                              const estCost = hasInput ? effectiveOrder * casePrice : null;
                               
                               return (
-                                <tr key={idx} className={`border-b hover:bg-gray-50 ${effectiveOrder === 0 ? 'opacity-50' : ''}`}>
+                                <tr key={idx} className={`border-b hover:bg-gray-50 ${hasInput && effectiveOrder === 0 ? 'opacity-50' : ''}`}>
                                   <td className="px-4 py-2 font-medium">{item.name}</td>
                                   <td className="px-4 py-2 text-gray-600">
                                     <span className="font-medium">{item.quantity}</span>
@@ -1088,27 +1109,36 @@ export default function ConsolidatedOrderingPage() {
                                   <td className="px-4 py-2 text-gray-600 text-xs">{item.caseSize || '-'}</td>
                                   <td className="px-4 py-2 text-center">
                                     <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
+                                      type="text"
+                                      inputMode="numeric"
                                       value={onHand}
-                                      onChange={(e) => updateOnHand(category, item.name, e.target.value, 'case')}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '' || /^\d*$/.test(val)) {
+                                          updateOnHand(category, item.name, val, 'case');
+                                        }
+                                      }}
                                       placeholder="-"
                                       className="w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                                     />
                                   </td>
                                   <td className="px-4 py-2 text-center bg-blue-50">
                                     <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={orderOverride !== '' ? orderOverride : effectiveOrder}
-                                      onChange={(e) => setOrderOverride(category, item.name, e.target.value)}
-                                      className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${effectiveOrder > 0 ? 'text-blue-600' : 'text-green-600'}`}
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={orderOverride !== '' ? orderOverride : (hasInput ? effectiveOrder : '')}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '' || /^\d*$/.test(val)) {
+                                          setOrderOverride(category, item.name, val);
+                                        }
+                                      }}
+                                      placeholder="-"
+                                      className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
                                     />
                                     <div className="text-xs text-gray-400">{isUnit ? '' : 'cases'}</div>
                                   </td>
-                                  <td className="px-4 py-2 text-right">${estCost.toFixed(2)}</td>
+                                  <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
                                 </tr>
                               );
                             })}
@@ -1129,20 +1159,29 @@ export default function ConsolidatedOrderingPage() {
                   {hasActiveFilters && <span className="ml-2 text-sm text-blue-600">(filtered)</span>}
                 </div>
                 <span className="text-2xl font-bold text-blue-800">
-                  ${Object.entries(displayOrders).reduce((sum, [vendor, v]) => {
-                    if (!v || !v.itemsList) return sum;
-                    return sum + v.itemsList.reduce((itemSum, item) => {
-                      const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
-                      const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
-                      const onHand = getOnHand(vendor, item.name);
-                      const orderOverride = getOrderOverride(vendor, item.name);
-                      let effectiveOrder = calculatedOrder;
-                      if (orderOverride !== '') effectiveOrder = orderOverride;
-                      else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
-                      const casePrice = item.casePrice || item.unitPrice || 0;
-                      return itemSum + (effectiveOrder * casePrice);
-                    }, 0);
-                  }, 0).toFixed(2)}
+                  {(() => {
+                    let total = 0;
+                    let hasAnyInput = false;
+                    Object.entries(displayOrders).forEach(([vendor, v]) => {
+                      if (!v || !v.itemsList) return;
+                      v.itemsList.forEach(item => {
+                        const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                        const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                        const onHand = getOnHand(vendor, item.name);
+                        const orderOverride = getOrderOverride(vendor, item.name);
+                        const hasInput = onHand !== '' || orderOverride !== '';
+                        if (hasInput) {
+                          hasAnyInput = true;
+                          let effectiveOrder = calculatedOrder;
+                          if (orderOverride !== '') effectiveOrder = orderOverride;
+                          else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
+                          const casePrice = item.casePrice || item.unitPrice || 0;
+                          total += effectiveOrder * casePrice;
+                        }
+                      });
+                    });
+                    return hasAnyInput ? `$${total.toFixed(2)}` : '-';
+                  })()}
                 </span>
               </div>
             )}
