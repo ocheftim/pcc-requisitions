@@ -821,14 +821,11 @@ export default function ConsolidatedOrderingPage() {
     const standardizeUnit = (qty, unit) => {
       const u = unit.toLowerCase().replace(/\s+/g, '');
       
-      // Already standard
+      // Weight - keep oz as oz, lb as lb
       if (u === 'oz') return { qty, unit: 'oz' };
       if (u === 'lb') return { qty, unit: 'lb' };
-      if (u === 'ct' || u === 'ea' || u === 'each') return { qty, unit: 'ct' };
-      
-      // Weight → oz
       if (u === 'g') return { qty: qty * 0.035274, unit: 'oz' };
-      if (u === 'kg') return { qty: qty * 35.274, unit: 'oz' };
+      if (u === 'kg') return { qty: qty * 2.20462, unit: 'lb' };
       
       // Volume → oz
       if (u === 'floz' || u === 'fl oz') return { qty, unit: 'oz' };
@@ -840,6 +837,7 @@ export default function ConsolidatedOrderingPage() {
       if (u === 'l') return { qty: qty * 33.814, unit: 'oz' };
       
       // Count items → ct
+      if (u === 'ct' || u === 'ea' || u === 'each') return { qty, unit: 'ct' };
       if (u === 'doz') return { qty: qty * 12, unit: 'ct' };
       if (u === 'bunch' || u === 'bu') return { qty, unit: 'ct' };
       
@@ -847,43 +845,26 @@ export default function ConsolidatedOrderingPage() {
       return { qty, unit: 'ct' };
     };
     
-    // Pre-process requisitions with ingredient lookups
+    // Pre-process requisitions
     const processedReqs = conf.requisitions.map(req => {
       const aggregated = {};
       req.items.forEach(item => {
         const key = item.name;
         if (!aggregated[key]) {
-          // Look up ingredient to get AP unit
-          const ing = ingredients.find(i => i.name === item.name);
-          const packSize = ing?.packSize || ing?.pack_size || '';
-          const apUnitMatch = packSize.match(/(OZ|LB|GAL|QT|PT|CT|EA|ML|L)$/i);
-          const apUnit = apUnitMatch ? apUnitMatch[1].toUpperCase() : 'LB';
-          
           aggregated[key] = { 
             name: item.name, 
             rawQty: 0, 
-            rawUnit: item.unit,
-            apUnit: apUnit 
+            rawUnit: item.unit
           };
         }
         aggregated[key].rawQty += parseFloat(item.quantity) || 0;
       });
       
-      // Convert to standard EP (oz, lb, ct) and AP
+      // Convert to standard units (oz or ct)
       Object.values(aggregated).forEach(item => {
         const std = standardizeUnit(item.rawQty, item.rawUnit);
         item.epQty = std.qty;
         item.epUnit = std.unit;
-        
-        // Convert EP to AP
-        const epInOz = item.epUnit === 'oz' ? item.epQty : (item.epUnit === 'lb' ? item.epQty * 16 : item.epQty);
-        if (item.apUnit === 'OZ') {
-          item.apQty = epInOz;
-        } else if (item.apUnit === 'LB') {
-          item.apQty = item.epUnit === 'lb' ? item.epQty : epInOz / 16;
-        } else {
-          item.apQty = item.epQty; // ct or other, no conversion
-        }
       });
       
       return {
@@ -909,7 +890,7 @@ export default function ConsolidatedOrderingPage() {
           table { width: 100%; border-collapse: collapse; }
           th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; }
           th { background: #f3f4f6; }
-          .ap-col { background: #eff6ff; }
+          th:nth-child(2), th:nth-child(3), th:nth-child(4), td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; width: 60px; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -933,16 +914,18 @@ export default function ConsolidatedOrderingPage() {
               <thead>
                 <tr>
                   <th>Ingredient</th>
-                  <th>EP Qty</th>
-                  <th>EP Unit</th>
-                  <th class="ap-col">AP Qty</th>
-                  <th class="ap-col">AP Unit</th>
+                  <th>oz</th>
+                  <th>lb</th>
+                  <th>ct</th>
                 </tr>
               </thead>
               <tbody>
-                ${req.processedItems.map(item => 
-                  '<tr><td>' + item.name + '</td><td>' + item.epQty.toFixed(2) + '</td><td>' + item.epUnit + '</td><td class="ap-col">' + item.apQty.toFixed(2) + '</td><td class="ap-col">' + item.apUnit + '</td></tr>'
-                ).join('')}
+                ${req.processedItems.map(item => {
+                  const ozVal = item.epUnit === 'oz' ? item.epQty.toFixed(2) : '';
+                  const lbVal = item.epUnit === 'lb' ? item.epQty.toFixed(2) : '';
+                  const ctVal = item.epUnit === 'ct' ? item.epQty.toFixed(0) : '';
+                  return '<tr><td>' + item.name + '</td><td>' + ozVal + '</td><td>' + lbVal + '</td><td>' + ctVal + '</td></tr>';
+                }).join('')}
               </tbody>
             </table>
           </div>
