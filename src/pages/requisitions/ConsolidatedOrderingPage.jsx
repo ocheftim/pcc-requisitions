@@ -903,9 +903,28 @@ export default function ConsolidatedOrderingPage() {
           <p><strong>Week:</strong> ${filterWeek || 'All Weeks'}</p>
         </div>
         
-        ${processedReqs.map(req => `
+        ${(() => {
+          // Course name lookup
+          const courseNames = {
+            'CUL130': 'Savory Cuisine',
+            'CUL140': 'Culinary Principles',
+            'CUL150': 'Garde Manger',
+            'CUL160': 'Bakery & Pastry Production I',
+            'CUL162': 'Art of Chocolate',
+            'CUL163': 'Sauces',
+            'CUL168': 'Specialty and Hearth Breads',
+            'CUL244': 'Confections, Show Pcs, Desserts',
+            'CUL260': 'Pastry Arts II',
+            'CUL266': 'Ice Cream, Bavarian, Mousse',
+            'CUL276': 'Pastry Production'
+          };
+          const getCourseName = (code) => {
+            const c = (code || '').replace(/\s+/g, '').toUpperCase();
+            return courseNames[c] ? code + ' ' + courseNames[c] : code || 'Unknown Course';
+          };
+          return processedReqs.map(req => `
           <div class="class-block">
-            <div class="class-header">${req.course || 'Unknown Course'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
+            <div class="class-header">${getCourseName(req.course)} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
             <div class="class-meta">
               <span><strong>Students:</strong> ${req.students}</span>
             </div>
@@ -940,7 +959,8 @@ export default function ConsolidatedOrderingPage() {
               </tbody>
             </table>
           </div>
-        `).join('')}
+        `).join('');
+        })()}
         
         <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
       </body>
