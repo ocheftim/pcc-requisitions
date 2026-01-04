@@ -691,9 +691,19 @@ export default function ConsolidatedOrderingPage() {
       filterItemType !== 'all' ? `Type: ${filterItemType}` : ''
     ].filter(Boolean).join(' | ');
     
-    // Calculate AP order quantities with on-hand and overrides
+    // Calculate AP order quantities with on-hand, overrides, and vendor alternatives
     const itemsToOrder = items.map(item => {
-      const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+      // Check for vendor alternative
+      const alternatives = vendorAlternatives[item.name] || [];
+      const selectedVendorData = getSelectedVendor(item.name);
+      
+      // Use selected vendor's data if available
+      const activePackSize = selectedVendorData?.pack_size || item.caseSize;
+      const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
+      const activeItemNumber = selectedVendorData?.item_number || item.itemNumber;
+      const activeVendor = selectedVendorData?.vendor || item.vendor;
+      
+      const apCalc = calculateAPOrder(item.quantity, item.unit, activePackSize);
       const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
       const onHand = getOnHand(vendor, item.name);
       const override = getOrderOverride(vendor, item.name);
@@ -701,14 +711,18 @@ export default function ConsolidatedOrderingPage() {
       if (override !== '') effectiveOrder = override;
       else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
       
-      const casePrice = item.casePrice || item.unitPrice || 0;
-      const isUnit = item.caseSize?.startsWith('1/');
+      const isUnit = activePackSize?.startsWith('1/');
       
       return {
         ...item,
+        itemNumber: activeItemNumber,
+        caseSize: activePackSize,
+        casePrice: activeCasePrice,
+        activeVendor: activeVendor,
+        vendorChanged: selectedVendorData && selectedVendorData.vendor !== item.vendor,
         onHand: onHand !== '' ? onHand : '-',
         orderQty: effectiveOrder,
-        estCost: effectiveOrder * casePrice,
+        estCost: effectiveOrder * activeCasePrice,
         isUnit
       };
     }).filter(item => item.orderQty > 0);
@@ -726,6 +740,7 @@ export default function ConsolidatedOrderingPage() {
           th { background: #f3f4f6; }
           .grocery { background: #fef3c7; }
           .grocery-label { color: #92400e; font-size: 11px; }
+          .vendor-change { color: #7c3aed; font-size: 11px; font-weight: bold; }
           .total { margin-top: 20px; text-align: right; font-weight: bold; font-size: 18px; }
           .order-col { background: #eff6ff; font-weight: bold; }
           .ep-need { color: #666; font-size: 12px; }
@@ -752,6 +767,7 @@ export default function ConsolidatedOrderingPage() {
                 <td>${item.itemNumber || '-'}</td>
                 <td>
                   ${item.name}
+                  ${item.vendorChanged ? `<br><span class="vendor-change">→ ${item.activeVendor}</span>` : ''}
                   ${item.isGrocery ? '<br><span class="grocery-label">🛒 Consider grocery store</span>' : ''}
                 </td>
                 <td>${item.caseSize || '-'}</td>
@@ -1036,7 +1052,7 @@ export default function ConsolidatedOrderingPage() {
                                   >
                                     {alternatives.map(alt => (
                                       <option key={alt.id} value={alt.vendor}>
-                                        {alt.vendor} - {alt.pack_size}
+                                        {alt.vendor} - {alt.pack_size} @ ${alt.case_price?.toFixed(2) || '?'}
                                       </option>
                                     ))}
                                   </select>
@@ -1092,7 +1108,12 @@ export default function ConsolidatedOrderingPage() {
                               let total = 0;
                               let hasAnyInput = false;
                               data.itemsList.forEach(item => {
-                                const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                                // Check for vendor alternative
+                                const selectedVendorData = getSelectedVendor(item.name);
+                                const activePackSize = selectedVendorData?.pack_size || item.caseSize;
+                                const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
+                                
+                                const apCalc = calculateAPOrder(item.quantity, item.unit, activePackSize);
                                 const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
                                 const onHand = getOnHand(vendor, item.name);
                                 const orderOverride = getOrderOverride(vendor, item.name);
@@ -1102,8 +1123,7 @@ export default function ConsolidatedOrderingPage() {
                                   let effectiveOrder = calculatedOrder;
                                   if (orderOverride !== '') effectiveOrder = orderOverride;
                                   else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
-                                  const casePrice = item.casePrice || item.unitPrice || 0;
-                                  total += effectiveOrder * casePrice;
+                                  total += effectiveOrder * activeCasePrice;
                                 }
                               });
                               return hasAnyInput ? `$${total.toFixed(2)}` : '-';
@@ -1197,7 +1217,7 @@ export default function ConsolidatedOrderingPage() {
                                       >
                                         {alternatives.map(alt => (
                                           <option key={alt.id} value={alt.vendor}>
-                                            {alt.vendor} - {alt.pack_size}
+                                            {alt.vendor} - {alt.pack_size} @ ${alt.case_price?.toFixed(2) || '?'}
                                           </option>
                                         ))}
                                       </select>
@@ -1266,7 +1286,12 @@ export default function ConsolidatedOrderingPage() {
                     Object.entries(displayOrders).forEach(([vendor, v]) => {
                       if (!v || !v.itemsList) return;
                       v.itemsList.forEach(item => {
-                        const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                        // Check for vendor alternative
+                        const selectedVendorData = getSelectedVendor(item.name);
+                        const activePackSize = selectedVendorData?.pack_size || item.caseSize;
+                        const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
+                        
+                        const apCalc = calculateAPOrder(item.quantity, item.unit, activePackSize);
                         const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
                         const onHand = getOnHand(vendor, item.name);
                         const orderOverride = getOrderOverride(vendor, item.name);
@@ -1276,8 +1301,7 @@ export default function ConsolidatedOrderingPage() {
                           let effectiveOrder = calculatedOrder;
                           if (orderOverride !== '') effectiveOrder = orderOverride;
                           else if (onHand !== '') effectiveOrder = Math.max(0, calculatedOrder - onHand);
-                          const casePrice = item.casePrice || item.unitPrice || 0;
-                          total += effectiveOrder * casePrice;
+                          total += effectiveOrder * activeCasePrice;
                         }
                       });
                     });

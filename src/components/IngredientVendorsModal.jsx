@@ -227,21 +227,25 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
                         </td>
                         <td className="px-3 py-2 text-center">
                           {v.is_preferred ? (
-                            <span className="text-green-600 font-bold">★</span>
+                            <span className="text-green-600 font-bold text-lg">★</span>
                           ) : (
                             <button
+                              type="button"
                               onClick={() => handleSetPreferred(v.id)}
-                              className="text-gray-400 hover:text-green-600"
+                              disabled={saving}
+                              className="text-gray-400 hover:text-green-600 text-lg cursor-pointer disabled:opacity-50"
                               title="Set as preferred"
                             >
                               ☆
                             </button>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-3 py-2 text-center space-x-2">
                           <button
+                            type="button"
                             onClick={() => handleDeleteVendor(v.id)}
-                            className="text-red-500 hover:text-red-700"
+                            disabled={saving}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50"
                             title="Delete"
                           >
                             🗑
