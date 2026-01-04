@@ -249,6 +249,54 @@ export default function ConsolidatedOrderingPage() {
   const [savingInventory, setSavingInventory] = useState(false);
   const [orderOverrides, setOrderOverrides] = useState({}); // Manual order qty overrides
   const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category'
+  const [vendorAlternatives, setVendorAlternatives] = useState({}); // Alternative vendors per ingredient
+  const [vendorOverrides, setVendorOverrides] = useState({}); // Selected vendor overrides
+
+  // Load vendor alternatives from Supabase
+  const loadVendorAlternatives = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ingredient_vendors')
+        .select('*')
+        .order('is_preferred', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Group by ingredient name
+      const altMap = {};
+      (data || []).forEach(v => {
+        if (!altMap[v.ingredient_name]) {
+          altMap[v.ingredient_name] = [];
+        }
+        altMap[v.ingredient_name].push(v);
+      });
+      setVendorAlternatives(altMap);
+    } catch (error) {
+      console.error('Error loading vendor alternatives:', error);
+    }
+  };
+
+  // Get selected vendor for an item (override or default)
+  const getSelectedVendor = (itemName) => {
+    if (vendorOverrides[itemName]) {
+      return vendorOverrides[itemName];
+    }
+    // Return preferred vendor info if available
+    const alts = vendorAlternatives[itemName];
+    if (alts && alts.length > 0) {
+      const preferred = alts.find(v => v.is_preferred) || alts[0];
+      return preferred;
+    }
+    return null;
+  };
+
+  // Set vendor override for an item
+  const setVendorOverride = (itemName, vendorData) => {
+    setVendorOverrides(prev => ({
+      ...prev,
+      [itemName]: vendorData
+    }));
+  };
 
   // Load inventory from Supabase
   const loadInventory = async () => {
@@ -380,7 +428,7 @@ export default function ConsolidatedOrderingPage() {
     setSavingInventory(false);
   };
 
-  useEffect(() => { loadData(); loadArchivedOrders(); loadInventory(); }, []);
+  useEffect(() => { loadData(); loadArchivedOrders(); loadInventory(); loadVendorAlternatives(); }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -936,11 +984,22 @@ export default function ConsolidatedOrderingPage() {
                         </thead>
                         <tbody>
                           {data.itemsList.map((item, idx) => {
+                            // Check for vendor alternatives
+                            const alternatives = vendorAlternatives[item.name] || [];
+                            const selectedVendorData = getSelectedVendor(item.name);
+                            const hasAlternatives = alternatives.length > 1;
+                            
+                            // Use selected vendor's data if available, otherwise use item data
+                            const activePackSize = selectedVendorData?.pack_size || item.caseSize;
+                            const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
+                            const activeItemNumber = selectedVendorData?.item_number || item.itemNumber;
+                            const activeVendor = selectedVendorData?.vendor || item.vendor;
+                            
                             // Calculate AP conversion
-                            const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                            const apCalc = calculateAPOrder(item.quantity, item.unit, activePackSize);
                             // Minimum 1 unit/case even if EP need is tiny
                             const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
-                            const isUnit = item.caseSize?.startsWith('1/');
+                            const isUnit = activePackSize?.startsWith('1/');
                             
                             // Get on-hand and order values
                             const onHand = getOnHand(vendor, item.name);
@@ -955,17 +1014,32 @@ export default function ConsolidatedOrderingPage() {
                             }
                             
                             // Estimate cost based on case price - only show if On Hand or Order has been set
-                            const casePrice = item.casePrice || item.unitPrice || 0;
                             const hasInput = onHand !== '' || orderOverride !== '';
-                            const estCost = hasInput ? effectiveOrder * casePrice : null;
+                            const estCost = hasInput ? effectiveOrder * activeCasePrice : null;
                             
                             return (
                             <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasInput && effectiveOrder === 0 ? 'opacity-50' : ''}`}>
-                              <td className="px-4 py-2 font-mono text-gray-500">{item.itemNumber || '-'}</td>
+                              <td className="px-4 py-2 font-mono text-gray-500">{activeItemNumber || '-'}</td>
                               <td className="px-4 py-2">
                                 <span className="font-medium">{item.name}</span>
                                 {item.isGrocery && (
                                   <span className="ml-2 text-amber-600 text-xs"><CartIcon /> Grocery</span>
+                                )}
+                                {hasAlternatives && (
+                                  <select
+                                    value={activeVendor}
+                                    onChange={(e) => {
+                                      const selected = alternatives.find(a => a.vendor === e.target.value);
+                                      if (selected) setVendorOverride(item.name, selected);
+                                    }}
+                                    className="ml-2 text-xs px-1 py-0.5 border rounded bg-purple-50 text-purple-700"
+                                  >
+                                    {alternatives.map(alt => (
+                                      <option key={alt.id} value={alt.vendor}>
+                                        {alt.vendor} - {alt.pack_size}
+                                      </option>
+                                    ))}
+                                  </select>
                                 )}
                               </td>
                               <td className="px-4 py-2 text-gray-600">
@@ -973,7 +1047,7 @@ export default function ConsolidatedOrderingPage() {
                                 <span className="text-gray-400 ml-1">{item.unit}</span>
                               </td>
                               <td className="px-4 py-2 text-gray-600 text-xs">
-                                {item.caseSize || '-'}
+                                {activePackSize || '-'}
                               </td>
                               <td className="px-4 py-2 text-center">
                                 <input
@@ -1004,7 +1078,7 @@ export default function ConsolidatedOrderingPage() {
                                   placeholder="-"
                                   className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
                                 />
-                                <div className="text-xs text-gray-400">{item.caseSize || ''}</div>
+                                <div className="text-xs text-gray-400">{activePackSize || ''}</div>
                               </td>
                               <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
                             </tr>
@@ -1081,9 +1155,19 @@ export default function ConsolidatedOrderingPage() {
                           </thead>
                           <tbody>
                             {catData.items.map((item, idx) => {
-                              const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                              // Check for vendor alternatives
+                              const alternatives = vendorAlternatives[item.name] || [];
+                              const selectedVendorData = getSelectedVendor(item.name);
+                              const hasAlternatives = alternatives.length > 1;
+                              
+                              // Use selected vendor's data if available
+                              const activePackSize = selectedVendorData?.pack_size || item.caseSize;
+                              const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
+                              const activeVendor = selectedVendorData?.vendor || item.vendor;
+                              
+                              const apCalc = calculateAPOrder(item.quantity, item.unit, activePackSize);
                               const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
-                              const isUnit = item.caseSize?.startsWith('1/');
+                              const isUnit = activePackSize?.startsWith('1/');
                               
                               const onHand = getOnHand(category, item.name);
                               const orderOverride = getOrderOverride(category, item.name);
@@ -1095,18 +1179,35 @@ export default function ConsolidatedOrderingPage() {
                                 effectiveOrder = Math.max(0, calculatedOrder - onHand);
                               }
                               
-                              const casePrice = item.casePrice || item.unitPrice || 0;
                               const hasInput = onHand !== '' || orderOverride !== '';
-                              const estCost = hasInput ? effectiveOrder * casePrice : null;
+                              const estCost = hasInput ? effectiveOrder * activeCasePrice : null;
                               
                               return (
                                 <tr key={idx} className={`border-b hover:bg-gray-50 ${hasInput && effectiveOrder === 0 ? 'opacity-50' : ''}`}>
-                                  <td className="px-4 py-2 font-medium">{item.name}</td>
+                                  <td className="px-4 py-2">
+                                    <span className="font-medium">{item.name}</span>
+                                    {hasAlternatives && (
+                                      <select
+                                        value={activeVendor}
+                                        onChange={(e) => {
+                                          const selected = alternatives.find(a => a.vendor === e.target.value);
+                                          if (selected) setVendorOverride(item.name, selected);
+                                        }}
+                                        className="ml-2 text-xs px-1 py-0.5 border rounded bg-purple-50 text-purple-700"
+                                      >
+                                        {alternatives.map(alt => (
+                                          <option key={alt.id} value={alt.vendor}>
+                                            {alt.vendor} - {alt.pack_size}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </td>
                                   <td className="px-4 py-2 text-gray-600">
                                     <span className="font-medium">{item.quantity}</span>
                                     <span className="text-gray-400 ml-1">{item.unit}</span>
                                   </td>
-                                  <td className="px-4 py-2 text-gray-600 text-xs">{item.caseSize || '-'}</td>
+                                  <td className="px-4 py-2 text-gray-600 text-xs">{activePackSize || '-'}</td>
                                   <td className="px-4 py-2 text-center">
                                     <input
                                       type="text"
@@ -1136,7 +1237,7 @@ export default function ConsolidatedOrderingPage() {
                                       placeholder="-"
                                       className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
                                     />
-                                    <div className="text-xs text-gray-400">{item.caseSize || ''}</div>
+                                    <div className="text-xs text-gray-400">{activePackSize || ''}</div>
                                   </td>
                                   <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
                                 </tr>

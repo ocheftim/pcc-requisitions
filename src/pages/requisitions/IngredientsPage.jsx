@@ -1,4 +1,5 @@
 import BulkUpdateModal from '../../components/BulkUpdateModal';
+import IngredientVendorsModal from '../../components/IngredientVendorsModal';
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 // Ingredients now loaded from Supabase
@@ -25,6 +26,8 @@ export default function IngredientsPage() {
   const [customUnitValue, setCustomUnitValue] = useState('');
   const [customBrandValue, setCustomBrandValue] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showVendorsModal, setShowVendorsModal] = useState(false);
+  const [vendorModalIngredient, setVendorModalIngredient] = useState(null);
   const [sortColumn, setSortColumn] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [selectedItems, setSelectedItems] = useState(new Set());
@@ -622,6 +625,7 @@ export default function IngredientsPage() {
                               {openMenuId === item.id && (
                                 <div className="absolute right-0 bottom-full mb-1 bg-white border rounded-lg shadow-lg z-50 py-1 min-w-32">
                                   <button onClick={() => { handleEdit(item); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">✏️ Edit</button>
+                                  <button onClick={() => { setVendorModalIngredient(item); setShowVendorsModal(true); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">🏪 Vendors</button>
                                   <button onClick={() => { handleDuplicateIngredient(item); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">⧉ Copy</button>
                                   <button onClick={() => { handleDeleteIngredient(item.id); }} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">🗑 Delete</button>
                                 </div>
@@ -697,6 +701,7 @@ export default function IngredientsPage() {
                       {openMenuId === ing.id && (
                         <div className="absolute right-0 bottom-full mb-1 bg-white border rounded shadow-lg z-50 min-w-24">
                           <button onClick={() => { handleEdit(ing); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">✎ Edit</button>
+                          <button onClick={() => { setVendorModalIngredient(ing); setShowVendorsModal(true); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">🏪 Vendors</button>
                           <button onClick={() => handleDuplicateIngredient(ing)} className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100">⧉ Copy</button>
                           <button onClick={() => { handleDeleteIngredient(ing.id); setOpenMenuId(null); }} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">🗑 Delete</button>
                         </div>
@@ -908,6 +913,13 @@ export default function IngredientsPage() {
         </div>
       )}
       <BulkUpdateModal isOpen={showBulkUpdate} onClose={() => setShowBulkUpdate(false)} onSave={() => loadIngredients()} />
+      {showVendorsModal && vendorModalIngredient && (
+        <IngredientVendorsModal
+          ingredient={vendorModalIngredient}
+          onClose={() => { setShowVendorsModal(false); setVendorModalIngredient(null); }}
+          onUpdate={() => loadIngredients()}
+        />
+      )}
     </div>
   );
 }
