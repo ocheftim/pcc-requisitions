@@ -817,23 +817,73 @@ export default function ConsolidatedOrderingPage() {
     const printWindow = window.open('', '_blank');
     const date = new Date().toLocaleDateString();
     
+    // Standardize all units to oz, lb, or ct
+    const standardizeUnit = (qty, unit) => {
+      const u = unit.toLowerCase().replace(/\s+/g, '');
+      
+      // Already standard
+      if (u === 'oz') return { qty, unit: 'oz' };
+      if (u === 'lb') return { qty, unit: 'lb' };
+      if (u === 'ct' || u === 'ea' || u === 'each') return { qty, unit: 'ct' };
+      
+      // Weight → oz
+      if (u === 'g') return { qty: qty * 0.035274, unit: 'oz' };
+      if (u === 'kg') return { qty: qty * 35.274, unit: 'oz' };
+      
+      // Volume → oz
+      if (u === 'floz' || u === 'fl oz') return { qty, unit: 'oz' };
+      if (u === 'cup') return { qty: qty * 8, unit: 'oz' };
+      if (u === 'pt') return { qty: qty * 16, unit: 'oz' };
+      if (u === 'qt') return { qty: qty * 32, unit: 'oz' };
+      if (u === 'gal') return { qty: qty * 128, unit: 'oz' };
+      if (u === 'ml') return { qty: qty * 0.033814, unit: 'oz' };
+      if (u === 'l') return { qty: qty * 33.814, unit: 'oz' };
+      
+      // Count items → ct
+      if (u === 'doz') return { qty: qty * 12, unit: 'ct' };
+      if (u === 'bunch' || u === 'bu') return { qty, unit: 'ct' };
+      
+      // Default to ct for unknown
+      return { qty, unit: 'ct' };
+    };
+    
     // Pre-process requisitions with ingredient lookups
     const processedReqs = conf.requisitions.map(req => {
       const aggregated = {};
       req.items.forEach(item => {
-        // Look up ingredient to get standard unit
-        const ing = ingredients.find(i => i.name === item.name);
-        const standardUnit = ing?.unit || item.unit;
-        const packSize = ing?.packSize || ing?.pack_size || '';
-        // Extract AP unit from packSize (e.g., "6/10LB" -> "LB", "1/16OZ" -> "OZ")
-        const apUnitMatch = packSize.match(/(OZ|LB|GAL|QT|PT|CT|EA|ML|L)$/i);
-        const apUnit = apUnitMatch ? apUnitMatch[1].toUpperCase() : standardUnit.toUpperCase();
-        
         const key = item.name;
         if (!aggregated[key]) {
-          aggregated[key] = { name: item.name, quantity: 0, epUnit: standardUnit, apUnit: apUnit };
+          // Look up ingredient to get AP unit
+          const ing = ingredients.find(i => i.name === item.name);
+          const packSize = ing?.packSize || ing?.pack_size || '';
+          const apUnitMatch = packSize.match(/(OZ|LB|GAL|QT|PT|CT|EA|ML|L)$/i);
+          const apUnit = apUnitMatch ? apUnitMatch[1].toUpperCase() : 'LB';
+          
+          aggregated[key] = { 
+            name: item.name, 
+            rawQty: 0, 
+            rawUnit: item.unit,
+            apUnit: apUnit 
+          };
         }
-        aggregated[key].quantity += parseFloat(item.quantity) || 0;
+        aggregated[key].rawQty += parseFloat(item.quantity) || 0;
+      });
+      
+      // Convert to standard EP (oz, lb, ct) and AP
+      Object.values(aggregated).forEach(item => {
+        const std = standardizeUnit(item.rawQty, item.rawUnit);
+        item.epQty = std.qty;
+        item.epUnit = std.unit;
+        
+        // Convert EP to AP
+        const epInOz = item.epUnit === 'oz' ? item.epQty : (item.epUnit === 'lb' ? item.epQty * 16 : item.epQty);
+        if (item.apUnit === 'OZ') {
+          item.apQty = epInOz;
+        } else if (item.apUnit === 'LB') {
+          item.apQty = item.epUnit === 'lb' ? item.epQty : epInOz / 16;
+        } else {
+          item.apQty = item.epQty; // ct or other, no conversion
+        }
       });
       
       return {
@@ -847,7 +897,7 @@ export default function ConsolidatedOrderingPage() {
       <head>
         <title>Order Confirmation - ${conf.instructor}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; }
           h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
           h2 { color: #374151; margin-top: 20px; }
           .header-info { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
@@ -859,6 +909,7 @@ export default function ConsolidatedOrderingPage() {
           table { width: 100%; border-collapse: collapse; }
           th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; }
           th { background: #f3f4f6; }
+          .ap-col { background: #eff6ff; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -884,12 +935,13 @@ export default function ConsolidatedOrderingPage() {
                   <th>Ingredient</th>
                   <th>EP Qty</th>
                   <th>EP Unit</th>
-                  <th>AP Unit</th>
+                  <th class="ap-col">AP Qty</th>
+                  <th class="ap-col">AP Unit</th>
                 </tr>
               </thead>
               <tbody>
                 ${req.processedItems.map(item => 
-                  '<tr><td>' + item.name + '</td><td>' + item.quantity.toFixed(2) + '</td><td>' + item.epUnit + '</td><td>' + item.apUnit + '</td></tr>'
+                  '<tr><td>' + item.name + '</td><td>' + item.epQty.toFixed(2) + '</td><td>' + item.epUnit + '</td><td class="ap-col">' + item.apQty.toFixed(2) + '</td><td class="ap-col">' + item.apUnit + '</td></tr>'
                 ).join('')}
               </tbody>
             </table>
