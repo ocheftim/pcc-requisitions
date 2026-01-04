@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { calculateUnitPrice } from '../utils/packSizeParser';
 
 export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }) {
   const [vendors, setVendors] = useState([]);
@@ -48,6 +49,11 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
       return;
     }
 
+    // Calculate unit price from case price and pack size
+    const calculatedUnitPrice = newVendor.case_price 
+      ? calculateUnitPrice(parseFloat(newVendor.case_price), newVendor.pack_size, 'oz')
+      : null;
+
     setSaving(true);
     const { error } = await supabase
       .from('ingredient_vendors')
@@ -57,7 +63,7 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
         item_number: newVendor.item_number || null,
         pack_size: newVendor.pack_size,
         case_price: newVendor.case_price ? parseFloat(newVendor.case_price) : null,
-        unit_price: newVendor.unit_price ? parseFloat(newVendor.unit_price) : null,
+        unit_price: calculatedUnitPrice,
         notes: newVendor.notes || null,
         is_preferred: vendors.length === 0 // First vendor is preferred
       });
@@ -182,7 +188,16 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
                           <input
                             type="text"
                             value={v.pack_size || ''}
-                            onChange={(e) => handleUpdateVendor(v.id, 'pack_size', e.target.value)}
+                            onChange={(e) => {
+                              const newPackSize = e.target.value;
+                              handleUpdateVendor(v.id, 'pack_size', newPackSize);
+                              if (v.case_price && newPackSize) {
+                                const newUnitPrice = calculateUnitPrice(v.case_price, newPackSize, 'oz');
+                                if (newUnitPrice !== null) {
+                                  handleUpdateVendor(v.id, 'unit_price', newUnitPrice);
+                                }
+                              }
+                            }}
                             className="w-20 px-2 py-1 border rounded text-sm"
                           />
                         </td>
@@ -191,20 +206,24 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
                             type="number"
                             step="0.01"
                             value={v.case_price || ''}
-                            onChange={(e) => handleUpdateVendor(v.id, 'case_price', e.target.value ? parseFloat(e.target.value) : null)}
+                            onChange={(e) => {
+                              const newCasePrice = e.target.value ? parseFloat(e.target.value) : null;
+                              const newUnitPrice = newCasePrice && v.pack_size 
+                                ? calculateUnitPrice(newCasePrice, v.pack_size, 'oz')
+                                : null;
+                              handleUpdateVendor(v.id, 'case_price', newCasePrice);
+                              if (newUnitPrice !== null) {
+                                handleUpdateVendor(v.id, 'unit_price', newUnitPrice);
+                              }
+                            }}
                             className="w-20 px-2 py-1 border rounded text-sm text-right"
                             placeholder="-"
                           />
                         </td>
-                        <td className="px-3 py-2 text-right">
-                          <input
-                            type="number"
-                            step="0.0001"
-                            value={v.unit_price || ''}
-                            onChange={(e) => handleUpdateVendor(v.id, 'unit_price', e.target.value ? parseFloat(e.target.value) : null)}
-                            className="w-20 px-2 py-1 border rounded text-sm text-right"
-                            placeholder="-"
-                          />
+                        <td className="px-3 py-2 text-right text-gray-600 bg-gray-50">
+                          ${v.case_price && v.pack_size 
+                            ? calculateUnitPrice(v.case_price, v.pack_size, 'oz')?.toFixed(4) || '-'
+                            : v.unit_price?.toFixed(4) || '-'}
                         </td>
                         <td className="px-3 py-2 text-center">
                           {v.is_preferred ? (
@@ -285,14 +304,11 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        value={newVendor.unit_price}
-                        onChange={(e) => setNewVendor({ ...newVendor, unit_price: e.target.value })}
-                        className="w-full px-3 py-2 border rounded"
-                        placeholder="$/unit"
-                      />
+                      <div className="w-full px-3 py-2 border rounded bg-gray-100 text-gray-600">
+                        {newVendor.case_price && newVendor.pack_size 
+                          ? `$${calculateUnitPrice(parseFloat(newVendor.case_price), newVendor.pack_size, 'oz')?.toFixed(4) || '-'}`
+                          : '-'}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
