@@ -820,7 +820,7 @@ export default function ConsolidatedOrderingPage() {
     const allItems = {};
     conf.requisitions.forEach(req => {
       req.items.forEach(item => {
-        const key = item.name;
+        const key = `${item.name}|${item.unit}`; // Use name+unit as key to avoid mixing units
         if (!allItems[key]) {
           allItems[key] = { name: item.name, quantity: 0, unit: item.unit };
         }
@@ -902,7 +902,7 @@ export default function ConsolidatedOrderingPage() {
     const allItems = {};
     conf.requisitions.forEach(req => {
       req.items.forEach(item => {
-        const key = item.name;
+        const key = `${item.name}|${item.unit}`; // Use name+unit as key to avoid mixing units
         if (!allItems[key]) {
           allItems[key] = { name: item.name, quantity: 0, unit: item.unit };
         }
