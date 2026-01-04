@@ -858,8 +858,9 @@ export default function ConsolidatedOrderingPage() {
               <thead>
                 <tr>
                   <th>Ingredient</th>
-                  <th>Quantity</th>
-                  <th>Unit</th>
+                  <th>EP Qty</th>
+                  <th>EP Unit</th>
+                  <th>AP Unit</th>
                 </tr>
               </thead>
               <tbody>
@@ -869,13 +870,19 @@ export default function ConsolidatedOrderingPage() {
                   req.items.forEach(item => {
                     const key = item.name + '|' + item.unit;
                     if (!aggregated[key]) {
-                      aggregated[key] = { name: item.name, quantity: 0, unit: item.unit };
+                      // Look up AP unit from ingredients
+                      const ing = ingredients.find(i => i.name === item.name);
+                      const packSize = ing?.packSize || '';
+                      // Extract unit from packSize (e.g., "6/10LB" -> "LB", "1/16OZ" -> "OZ")
+                      const apUnitMatch = packSize.match(/(OZ|LB|GAL|QT|PT|CT|EA|ML|L)$/i);
+                      const apUnit = apUnitMatch ? apUnitMatch[1].toUpperCase() : '-';
+                      aggregated[key] = { name: item.name, quantity: 0, unit: item.unit, apUnit: apUnit };
                     }
                     aggregated[key].quantity += parseFloat(item.quantity) || 0;
                   });
                   return Object.values(aggregated)
                     .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(item => '<tr><td>' + item.name + '</td><td>' + item.quantity.toFixed(2) + '</td><td>' + item.unit + '</td></tr>')
+                    .map(item => '<tr><td>' + item.name + '</td><td>' + item.quantity.toFixed(2) + '</td><td>' + item.unit + '</td><td>' + item.apUnit + '</td></tr>')
                     .join('');
                 })()}
               </tbody>
