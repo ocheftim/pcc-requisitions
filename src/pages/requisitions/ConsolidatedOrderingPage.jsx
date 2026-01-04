@@ -784,7 +784,7 @@ export default function ConsolidatedOrderingPage() {
       </html>
     `);
     printWindow.document.close();
-    printWindow.focus();
+    setTimeout(() => printWindow.focus(), 100);
   };
 
   // Generate instructor confirmations from filtered requisitions
@@ -888,7 +888,7 @@ export default function ConsolidatedOrderingPage() {
       </html>
     `);
     printWindow.document.close();
-    printWindow.focus();
+    setTimeout(() => printWindow.focus(), 100);
   };
 
   // Email confirmation (opens email client)
