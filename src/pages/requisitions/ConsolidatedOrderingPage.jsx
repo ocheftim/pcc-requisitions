@@ -816,18 +816,6 @@ export default function ConsolidatedOrderingPage() {
     const printWindow = window.open('', '_blank');
     const date = new Date().toLocaleDateString();
     
-    // Aggregate items across all requisitions for this instructor
-    const allItems = {};
-    conf.requisitions.forEach(req => {
-      req.items.forEach(item => {
-        const key = `${item.name}|${item.unit}`; // Use name+unit as key to avoid mixing units
-        if (!allItems[key]) {
-          allItems[key] = { name: item.name, quantity: 0, unit: item.unit };
-        }
-        allItems[key].quantity += parseFloat(item.quantity) || 0;
-      });
-    });
-    
     printWindow.document.write(`
       <html>
       <head>
@@ -838,11 +826,12 @@ export default function ConsolidatedOrderingPage() {
           h2 { color: #374151; margin-top: 20px; }
           .header-info { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
           .header-info p { margin: 5px 0; }
-          .class-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-          .class-header { font-weight: bold; color: #1e40af; margin-bottom: 10px; }
-          .recipes { color: #6b7280; font-style: italic; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          .class-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 20px; page-break-inside: avoid; }
+          .class-header { font-weight: bold; color: #1e40af; margin-bottom: 10px; font-size: 16px; }
+          .class-meta { display: flex; gap: 20px; margin-bottom: 10px; }
+          .recipes { color: #6b7280; font-style: italic; margin-bottom: 15px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; }
           th { background: #f3f4f6; }
           .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
           @media print { button { display: none; } }
@@ -856,34 +845,34 @@ export default function ConsolidatedOrderingPage() {
           <p><strong>Week:</strong> ${filterWeek || 'All Weeks'}</p>
         </div>
         
-        <h2>Classes & Recipes</h2>
         ${conf.requisitions.map(req => `
           <div class="class-block">
             <div class="class-header">${req.course || 'Unknown Course'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
-            <p><strong>Students:</strong> ${req.students}</p>
+            <div class="class-meta">
+              <span><strong>Students:</strong> ${req.students}</span>
+            </div>
             <p class="recipes"><strong>Recipes:</strong> ${req.recipes || 'None specified'}</p>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Ingredient</th>
+                  <th>Quantity</th>
+                  <th>Unit</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${req.items.sort((a, b) => a.name.localeCompare(b.name)).map(item => `
+                  <tr>
+                    <td>${item.name}</td>
+                    <td>${parseFloat(item.quantity).toFixed(2)}</td>
+                    <td>${item.unit}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
         `).join('')}
-        
-        <h2>Consolidated Ingredients</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Ingredient</th>
-              <th>Quantity</th>
-              <th>Unit</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${Object.values(allItems).sort((a, b) => a.name.localeCompare(b.name)).map(item => `
-              <tr>
-                <td>${item.name}</td>
-                <td>${item.quantity.toFixed(2)}</td>
-                <td>${item.unit}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
         
         <div class="footer">
           <p>This confirmation was generated from the ToqueWorks Lab Requisition System.</p>
@@ -899,32 +888,20 @@ export default function ConsolidatedOrderingPage() {
 
   // Email confirmation (opens email client)
   const emailConfirmation = (conf) => {
-    const allItems = {};
-    conf.requisitions.forEach(req => {
-      req.items.forEach(item => {
-        const key = `${item.name}|${item.unit}`; // Use name+unit as key to avoid mixing units
-        if (!allItems[key]) {
-          allItems[key] = { name: item.name, quantity: 0, unit: item.unit };
-        }
-        allItems[key].quantity += parseFloat(item.quantity) || 0;
-      });
-    });
-    
-    const classDetails = conf.requisitions.map(req => 
-      `• ${req.course || 'Unknown'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}`
-    ).join('\n\n');
-    
-    const ingredientList = Object.values(allItems)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(item => `• ${item.name}: ${item.quantity.toFixed(2)} ${item.unit}`)
-      .join('\n');
+    const classDetails = conf.requisitions.map(req => {
+      const ingredientList = req.items
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(item => `    - ${item.name}: ${parseFloat(item.quantity).toFixed(2)} ${item.unit}`)
+        .join('\n');
+      
+      return `• ${req.course || 'Unknown'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}\n  Ingredients:\n${ingredientList}`;
+    }).join('\n\n');
     
     const subject = encodeURIComponent(`Order Confirmation - ${filterWeek || 'Upcoming'}`);
     const body = encodeURIComponent(
       `Hi ${conf.instructor},\n\n` +
       `This is your order confirmation for ${filterWeek || 'the upcoming week'}.\n\n` +
-      `CLASSES & RECIPES:\n${classDetails}\n\n` +
-      `CONSOLIDATED INGREDIENTS:\n${ingredientList}\n\n` +
+      `${classDetails}\n\n` +
       `Please review and let me know if you have any questions.\n\n` +
       `Best regards,\nProgram Manager`
     );
