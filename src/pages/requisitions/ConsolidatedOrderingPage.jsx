@@ -784,6 +784,7 @@ export default function ConsolidatedOrderingPage() {
       </html>
     `);
     printWindow.document.close();
+    printWindow.focus();
   };
 
   // Generate instructor confirmations from filtered requisitions
@@ -882,16 +883,12 @@ export default function ConsolidatedOrderingPage() {
           </div>
         `).join('')}
         
-        <div class="footer">
-          <p>This confirmation was generated from the ToqueWorks Lab Requisition System.</p>
-          <p>Please review and contact the Program Manager if you have any questions.</p>
-        </div>
-        
         <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
       </body>
       </html>
     `);
     printWindow.document.close();
+    printWindow.focus();
   };
 
   // Email confirmation (opens email client)
