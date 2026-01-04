@@ -251,6 +251,7 @@ export default function ConsolidatedOrderingPage() {
   const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category'
   const [vendorAlternatives, setVendorAlternatives] = useState({}); // Alternative vendors per ingredient
   const [vendorOverrides, setVendorOverrides] = useState({}); // Selected vendor overrides
+  const [showConfirmations, setShowConfirmations] = useState(false); // Show instructor confirmations modal
 
   // Load vendor alternatives from Supabase
   const loadVendorAlternatives = async () => {
@@ -785,6 +786,153 @@ export default function ConsolidatedOrderingPage() {
     printWindow.document.close();
   };
 
+  // Generate instructor confirmations from filtered requisitions
+  const getInstructorConfirmations = () => {
+    const byInstructor = {};
+    filteredRequisitions.forEach(req => {
+      const instructor = req.instructor || 'Unknown';
+      if (!byInstructor[instructor]) {
+        byInstructor[instructor] = {
+          instructor,
+          email: req.instructor_email || null,
+          requisitions: []
+        };
+      }
+      const items = typeof req.items === 'string' ? JSON.parse(req.items) : (req.items || []);
+      byInstructor[instructor].requisitions.push({
+        id: req.id,
+        course: req.course,
+        classDate: req.class_date,
+        students: req.students || 0,
+        recipes: req.recipes || '',
+        items: items
+      });
+    });
+    return Object.values(byInstructor);
+  };
+
+  // Print confirmation for one instructor
+  const printConfirmation = (conf) => {
+    const printWindow = window.open('', '_blank');
+    const date = new Date().toLocaleDateString();
+    
+    // Aggregate items across all requisitions for this instructor
+    const allItems = {};
+    conf.requisitions.forEach(req => {
+      req.items.forEach(item => {
+        const key = item.name;
+        if (!allItems[key]) {
+          allItems[key] = { name: item.name, quantity: 0, unit: item.unit };
+        }
+        allItems[key].quantity += parseFloat(item.quantity) || 0;
+      });
+    });
+    
+    printWindow.document.write(`
+      <html>
+      <head>
+        <title>Order Confirmation - ${conf.instructor}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+          h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
+          h2 { color: #374151; margin-top: 20px; }
+          .header-info { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+          .header-info p { margin: 5px 0; }
+          .class-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+          .class-header { font-weight: bold; color: #1e40af; margin-bottom: 10px; }
+          .recipes { color: #6b7280; font-style: italic; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background: #f3f4f6; }
+          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <h1>📋 Order Confirmation</h1>
+        <div class="header-info">
+          <p><strong>Instructor:</strong> ${conf.instructor}</p>
+          <p><strong>Generated:</strong> ${date}</p>
+          <p><strong>Week:</strong> ${filterWeek || 'All Weeks'}</p>
+        </div>
+        
+        <h2>Classes & Recipes</h2>
+        ${conf.requisitions.map(req => `
+          <div class="class-block">
+            <div class="class-header">${req.course || 'Unknown Course'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
+            <p><strong>Students:</strong> ${req.students}</p>
+            <p class="recipes"><strong>Recipes:</strong> ${req.recipes || 'None specified'}</p>
+          </div>
+        `).join('')}
+        
+        <h2>Consolidated Ingredients</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ingredient</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.values(allItems).sort((a, b) => a.name.localeCompare(b.name)).map(item => `
+              <tr>
+                <td>${item.name}</td>
+                <td>${item.quantity.toFixed(2)}</td>
+                <td>${item.unit}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="footer">
+          <p>This confirmation was generated from the ToqueWorks Lab Requisition System.</p>
+          <p>Please review and contact the Program Manager if you have any questions.</p>
+        </div>
+        
+        <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Email confirmation (opens email client)
+  const emailConfirmation = (conf) => {
+    const allItems = {};
+    conf.requisitions.forEach(req => {
+      req.items.forEach(item => {
+        const key = item.name;
+        if (!allItems[key]) {
+          allItems[key] = { name: item.name, quantity: 0, unit: item.unit };
+        }
+        allItems[key].quantity += parseFloat(item.quantity) || 0;
+      });
+    });
+    
+    const classDetails = conf.requisitions.map(req => 
+      `• ${req.course || 'Unknown'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}`
+    ).join('\n\n');
+    
+    const ingredientList = Object.values(allItems)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(item => `• ${item.name}: ${item.quantity.toFixed(2)} ${item.unit}`)
+      .join('\n');
+    
+    const subject = encodeURIComponent(`Order Confirmation - ${filterWeek || 'Upcoming'}`);
+    const body = encodeURIComponent(
+      `Hi ${conf.instructor},\n\n` +
+      `This is your order confirmation for ${filterWeek || 'the upcoming week'}.\n\n` +
+      `CLASSES & RECIPES:\n${classDetails}\n\n` +
+      `CONSOLIDATED INGREDIENTS:\n${ingredientList}\n\n` +
+      `Please review and let me know if you have any questions.\n\n` +
+      `Best regards,\nProgram Manager`
+    );
+    
+    const email = conf.email || '';
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+  };
+
   const clearFilters = () => {
     setFilterWeek('all');
     setFilterInstructor('all');
@@ -817,6 +965,13 @@ export default function ConsolidatedOrderingPage() {
           <div className="flex gap-2">
             <button onClick={() => { setViewMode('current'); setSelectedArchive(null); }} className={`px-4 py-2 rounded font-medium transition-colors ${viewMode === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Orders</button>
             <button onClick={() => setViewMode('archive')} className={`px-4 py-2 rounded font-medium transition-colors flex items-center gap-2 ${viewMode === 'archive' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}><ArchiveIcon />Archive ({archivedOrders.length})</button>
+            <button 
+              onClick={() => setShowConfirmations(true)} 
+              disabled={filteredRequisitions.length === 0}
+              className="px-4 py-2 rounded font-medium transition-colors bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              📋 Confirmations
+            </button>
           </div>
         </div>
 
@@ -1311,6 +1466,99 @@ export default function ConsolidatedOrderingPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Instructor Confirmations Modal */}
+        {showConfirmations && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowConfirmations(false)}>
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-green-600 text-white px-6 py-4 flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold">📋 Order Confirmations</h2>
+                  <p className="text-sm text-green-100">{filterWeek && filterWeek !== 'all' ? filterWeek : 'All Weeks'} • {filteredRequisitions.length} requisitions</p>
+                </div>
+                <button onClick={() => setShowConfirmations(false)} className="text-white hover:text-green-200 text-2xl">&times;</button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                {getInstructorConfirmations().length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No requisitions found for current filters.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {getInstructorConfirmations().map((conf, idx) => (
+                      <div key={idx} className="border rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 px-4 py-3 flex justify-between items-center">
+                          <div>
+                            <h3 className="font-bold text-lg text-gray-800">{conf.instructor}</h3>
+                            <p className="text-sm text-gray-600">{conf.requisitions.length} class{conf.requisitions.length !== 1 ? 'es' : ''}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => printConfirmation(conf)}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
+                            >
+                              <PrintIcon /> Print
+                            </button>
+                            <button 
+                              onClick={() => emailConfirmation(conf)}
+                              className="px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                            >
+                              ✉️ Email
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-4">
+                          {conf.requisitions.map((req, reqIdx) => (
+                            <div key={reqIdx} className="mb-4 last:mb-0 pb-4 last:pb-0 border-b last:border-b-0">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <span className="font-semibold text-blue-700">{req.course || 'Unknown Course'}</span>
+                                  <span className="mx-2 text-gray-400">•</span>
+                                  <span className="text-gray-600">{req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</span>
+                                </div>
+                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-sm">{req.students} students</span>
+                              </div>
+                              <div className="text-sm text-gray-600 mb-2">
+                                <span className="font-medium">Recipes:</span> {req.recipes || <span className="italic text-gray-400">None specified</span>}
+                              </div>
+                              <div className="text-sm">
+                                <span className="font-medium text-gray-700">Ingredients:</span>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {req.items.slice(0, 8).map((item, iIdx) => (
+                                    <span key={iIdx} className="bg-gray-100 px-2 py-0.5 rounded text-xs">
+                                      {item.name} ({item.quantity} {item.unit})
+                                    </span>
+                                  ))}
+                                  {req.items.length > 8 && (
+                                    <span className="text-gray-500 text-xs">+{req.items.length - 8} more</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="mt-6 pt-4 border-t flex justify-between items-center">
+                  <p className="text-sm text-gray-500">
+                    Print or email confirmations to verify orders with instructors.
+                  </p>
+                  <button
+                    onClick={() => {
+                      getInstructorConfirmations().forEach(conf => printConfirmation(conf));
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    Print All
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
