@@ -890,7 +890,8 @@ export default function ConsolidatedOrderingPage() {
           table { width: 100%; border-collapse: collapse; }
           th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; }
           th { background: #f3f4f6; }
-          th:nth-child(2), th:nth-child(3), th:nth-child(4), td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; width: 60px; }
+          th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: center; width: 60px; }
+          td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; width: 60px; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -914,16 +915,26 @@ export default function ConsolidatedOrderingPage() {
               <thead>
                 <tr>
                   <th>Ingredient</th>
-                  <th>oz</th>
-                  <th>lb</th>
-                  <th>ct</th>
+                  <th>OZ</th>
+                  <th>LB</th>
+                  <th>CT</th>
                 </tr>
               </thead>
               <tbody>
                 ${req.processedItems.map(item => {
-                  const ozVal = item.epUnit === 'oz' ? item.epQty.toFixed(2) : '';
-                  const lbVal = item.epUnit === 'lb' ? item.epQty.toFixed(2) : '';
-                  const ctVal = item.epUnit === 'ct' ? item.epQty.toFixed(0) : '';
+                  let ozVal = '', lbVal = '', ctVal = '';
+                  if (item.epUnit === 'oz') {
+                    ozVal = item.epQty.toFixed(2);
+                  } else if (item.epUnit === 'lb') {
+                    // If fractional lb, convert to oz
+                    if (item.epQty < 1) {
+                      ozVal = (item.epQty * 16).toFixed(2);
+                    } else {
+                      lbVal = item.epQty.toFixed(2);
+                    }
+                  } else if (item.epUnit === 'ct') {
+                    ctVal = item.epQty.toFixed(0);
+                  }
                   return '<tr><td>' + item.name + '</td><td>' + ozVal + '</td><td>' + lbVal + '</td><td>' + ctVal + '</td></tr>';
                 }).join('')}
               </tbody>
