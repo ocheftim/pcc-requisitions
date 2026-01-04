@@ -817,6 +817,31 @@ export default function ConsolidatedOrderingPage() {
     const printWindow = window.open('', '_blank');
     const date = new Date().toLocaleDateString();
     
+    // Pre-process requisitions with ingredient lookups
+    const processedReqs = conf.requisitions.map(req => {
+      const aggregated = {};
+      req.items.forEach(item => {
+        // Look up ingredient to get standard unit
+        const ing = ingredients.find(i => i.name === item.name);
+        const standardUnit = ing?.unit || item.unit;
+        const packSize = ing?.packSize || ing?.pack_size || '';
+        // Extract AP unit from packSize (e.g., "6/10LB" -> "LB", "1/16OZ" -> "OZ")
+        const apUnitMatch = packSize.match(/(OZ|LB|GAL|QT|PT|CT|EA|ML|L)$/i);
+        const apUnit = apUnitMatch ? apUnitMatch[1].toUpperCase() : standardUnit.toUpperCase();
+        
+        const key = item.name;
+        if (!aggregated[key]) {
+          aggregated[key] = { name: item.name, quantity: 0, epUnit: standardUnit, apUnit: apUnit };
+        }
+        aggregated[key].quantity += parseFloat(item.quantity) || 0;
+      });
+      
+      return {
+        ...req,
+        processedItems: Object.values(aggregated).sort((a, b) => a.name.localeCompare(b.name))
+      };
+    });
+    
     printWindow.document.write(`
       <html>
       <head>
@@ -834,7 +859,6 @@ export default function ConsolidatedOrderingPage() {
           table { width: 100%; border-collapse: collapse; }
           th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 13px; }
           th { background: #f3f4f6; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -846,7 +870,7 @@ export default function ConsolidatedOrderingPage() {
           <p><strong>Week:</strong> ${filterWeek || 'All Weeks'}</p>
         </div>
         
-        ${conf.requisitions.map(req => `
+        ${processedReqs.map(req => `
           <div class="class-block">
             <div class="class-header">${req.course || 'Unknown Course'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
             <div class="class-meta">
@@ -864,27 +888,9 @@ export default function ConsolidatedOrderingPage() {
                 </tr>
               </thead>
               <tbody>
-                ${(() => {
-                  // Aggregate items within this requisition
-                  const aggregated = {};
-                  req.items.forEach(item => {
-                    const key = item.name + '|' + item.unit;
-                    if (!aggregated[key]) {
-                      // Look up AP unit from ingredients
-                      const ing = ingredients.find(i => i.name === item.name);
-                      const packSize = ing?.packSize || '';
-                      // Extract unit from packSize (e.g., "6/10LB" -> "LB", "1/16OZ" -> "OZ")
-                      const apUnitMatch = packSize.match(/(OZ|LB|GAL|QT|PT|CT|EA|ML|L)$/i);
-                      const apUnit = apUnitMatch ? apUnitMatch[1].toUpperCase() : '-';
-                      aggregated[key] = { name: item.name, quantity: 0, unit: item.unit, apUnit: apUnit };
-                    }
-                    aggregated[key].quantity += parseFloat(item.quantity) || 0;
-                  });
-                  return Object.values(aggregated)
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(item => '<tr><td>' + item.name + '</td><td>' + item.quantity.toFixed(2) + '</td><td>' + item.unit + '</td><td>' + item.apUnit + '</td></tr>')
-                    .join('');
-                })()}
+                ${req.processedItems.map(item => 
+                  '<tr><td>' + item.name + '</td><td>' + item.quantity.toFixed(2) + '</td><td>' + item.epUnit + '</td><td>' + item.apUnit + '</td></tr>'
+                ).join('')}
               </tbody>
             </table>
           </div>
