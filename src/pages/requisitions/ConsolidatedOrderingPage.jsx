@@ -1004,7 +1004,7 @@ export default function ConsolidatedOrderingPage() {
                                   placeholder="-"
                                   className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
                                 />
-                                <div className="text-xs text-gray-400">{isUnit ? '' : 'cases'}</div>
+                                <div className="text-xs text-gray-400">{item.caseSize || ''}</div>
                               </td>
                               <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
                             </tr>
@@ -1136,7 +1136,7 @@ export default function ConsolidatedOrderingPage() {
                                       placeholder="-"
                                       className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
                                     />
-                                    <div className="text-xs text-gray-400">{isUnit ? '' : 'cases'}</div>
+                                    <div className="text-xs text-gray-400">{item.caseSize || ''}</div>
                                   </td>
                                   <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
                                 </tr>
