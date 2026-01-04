@@ -33,7 +33,7 @@ export default function IngredientVendorsModal({ ingredient, onClose, onUpdate }
       .from('ingredient_vendors')
       .select('*')
       .eq('ingredient_name', ingredient.name)
-      .order('is_preferred', { ascending: false });
+      .order('vendor', { ascending: true });
     
     if (error) {
       console.error('Error loading vendors:', error);

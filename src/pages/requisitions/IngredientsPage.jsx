@@ -541,9 +541,10 @@ export default function IngredientsPage() {
         </div>
         <div className="flex justify-between items-center mt-3 pt-3 border-t">
           <div className="flex items-center gap-2">
-            <button onClick={() => setEditMode(!editMode)} className={`px-3 py-1.5 text-sm rounded ${editMode ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {editMode ? '✓ Edit Mode' : '✎ Edit Mode'}
+            <button onClick={() => setEditMode(!editMode)} className={`px-3 py-1.5 text-sm rounded ${editMode ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {editMode ? '✓ Editing...' : '✎ Edit Mode'}
             </button>
+            {editMode && <span className="text-sm text-orange-600">Click any field to edit. Changes save on blur.</span>}
             <span className="text-sm text-gray-500 ml-4">{filteredIngredients.length} items</span>
           </div>
           <div className="flex items-center">
@@ -613,11 +614,66 @@ export default function IngredientsPage() {
                               </button>
                             </td>
                             <td className="px-3 py-2">
-                              <div className="font-semibold text-gray-900">{item.name}</div>
-                              <div className="text-xs text-gray-500">{item.vendorCode || '0000000'} | {item.vendor || '-'} | {item.packSize || '-'} | {item.brand || '-'}</div>
+                              {editMode ? (
+                                <div className="space-y-1">
+                                  <input
+                                    type="text"
+                                    defaultValue={item.name}
+                                    onBlur={(e) => saveIngredientEdit(item.id, { name: e.target.value })}
+                                    className="w-full px-2 py-1 border rounded text-sm font-semibold"
+                                  />
+                                  <div className="flex gap-1">
+                                    <input
+                                      type="text"
+                                      defaultValue={item.vendorCode || ''}
+                                      onBlur={(e) => saveIngredientEdit(item.id, { vendorCode: e.target.value })}
+                                      className="w-20 px-1 py-0.5 border rounded text-xs"
+                                      placeholder="Item #"
+                                    />
+                                    <select
+                                      defaultValue={item.vendor || 'Sysco'}
+                                      onChange={(e) => saveIngredientEdit(item.id, { vendor: e.target.value })}
+                                      className="flex-1 px-1 py-0.5 border rounded text-xs"
+                                    >
+                                      {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                                    </select>
+                                    <input
+                                      type="text"
+                                      defaultValue={item.packSize || ''}
+                                      onBlur={(e) => saveIngredientEdit(item.id, { packSize: e.target.value })}
+                                      className="w-20 px-1 py-0.5 border rounded text-xs"
+                                      placeholder="Pack Size"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="font-semibold text-gray-900">{item.name}</div>
+                                  <div className="text-xs text-gray-500">{item.vendorCode || '0000000'} | {item.vendor || '-'} | {item.packSize || '-'} | {item.brand || '-'}</div>
+                                </>
+                              )}
                             </td>
-                            <td className="px-3 py-2 text-gray-600">{item.unit}</td>
-                            <td className="px-3 py-2 text-right">${casePrice.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-gray-600">
+                              {editMode ? (
+                                <input
+                                  type="text"
+                                  defaultValue={item.unit}
+                                  onBlur={(e) => saveIngredientEdit(item.id, { unit: e.target.value })}
+                                  className="w-16 px-1 py-0.5 border rounded text-sm"
+                                />
+                              ) : item.unit}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {editMode ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={casePrice}
+                                  onBlur={(e) => saveIngredientEdit(item.id, { casePrice: parseFloat(e.target.value) || 0 })}
+                                  className="w-20 px-1 py-0.5 border rounded text-sm text-right"
+                                />
+                              ) : `$${casePrice.toFixed(2)}`}
+                            </td>
                             <td className="px-3 py-2 text-right font-medium text-green-700">${unitPrice.toFixed(4)}</td>
                             <td className="p-2 text-center text-xs">{(item.programs || []).map(p => p === 'Baking & Pastry Arts' ? 'B' : p === 'Culinary Arts' ? 'C' : 'F').join('')}</td>
                             <td className="p-2 text-center relative">
