@@ -622,18 +622,18 @@ export default function IngredientsPage() {
                                     onBlur={(e) => saveIngredientEdit(item.id, { name: e.target.value })}
                                     className="w-full px-2 py-1 border rounded text-sm font-semibold"
                                   />
-                                  <div className="flex gap-1">
+                                  <div className="flex gap-1 flex-wrap">
                                     <input
                                       type="text"
                                       defaultValue={item.vendorCode || ''}
                                       onBlur={(e) => saveIngredientEdit(item.id, { vendorCode: e.target.value })}
-                                      className="w-20 px-1 py-0.5 border rounded text-xs"
+                                      className="w-16 px-1 py-0.5 border rounded text-xs"
                                       placeholder="Item #"
                                     />
                                     <select
                                       defaultValue={item.vendor || 'Sysco'}
                                       onChange={(e) => saveIngredientEdit(item.id, { vendor: e.target.value })}
-                                      className="flex-1 px-1 py-0.5 border rounded text-xs"
+                                      className="w-24 px-1 py-0.5 border rounded text-xs"
                                     >
                                       {vendors.map(v => <option key={v} value={v}>{v}</option>)}
                                     </select>
@@ -641,8 +641,15 @@ export default function IngredientsPage() {
                                       type="text"
                                       defaultValue={item.packSize || ''}
                                       onBlur={(e) => saveIngredientEdit(item.id, { packSize: e.target.value })}
+                                      className="w-16 px-1 py-0.5 border rounded text-xs"
+                                      placeholder="Pack"
+                                    />
+                                    <input
+                                      type="text"
+                                      defaultValue={item.brand || ''}
+                                      onBlur={(e) => saveIngredientEdit(item.id, { brand: e.target.value })}
                                       className="w-20 px-1 py-0.5 border rounded text-xs"
-                                      placeholder="Pack Size"
+                                      placeholder="Brand"
                                     />
                                   </div>
                                 </div>
@@ -659,7 +666,7 @@ export default function IngredientsPage() {
                                   type="text"
                                   defaultValue={item.unit}
                                   onBlur={(e) => saveIngredientEdit(item.id, { unit: e.target.value })}
-                                  className="w-16 px-1 py-0.5 border rounded text-sm"
+                                  className="w-14 px-1 py-0.5 border rounded text-sm"
                                 />
                               ) : item.unit}
                             </td>
@@ -731,6 +738,7 @@ export default function IngredientsPage() {
             <tbody>
               {filteredIngredients.map((ing, idx) => {
                 const isSelected = selectedItems.has(ing.id);
+                const editableFields = ['name', 'brand', 'category', 'subcategory', 'unit', 'vendor', 'vendorCode', 'packSize', 'casePrice'];
                 return (
                   <tr key={ing.id} className={`border-t hover:bg-blue-50 ${isSelected ? 'bg-green-100' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                     <td className="p-2 border text-center">
@@ -743,6 +751,73 @@ export default function IngredientsPage() {
                         return (
                           <td key={col} className="p-2 border text-center">
                             <button onClick={() => toggleInstructorVisibility(ing.id)} className={instructorHidden.has(ing.id) ? 'text-red-500' : 'text-green-600'}>{instructorHidden.has(ing.id) ? '✗' : '✓'}</button>
+                          </td>
+                        );
+                      }
+                      // Edit mode for editable fields
+                      if (editMode && editableFields.includes(col)) {
+                        if (col === 'vendor') {
+                          return (
+                            <td key={col} className="p-1 border">
+                              <select
+                                defaultValue={ing.vendor || 'Sysco'}
+                                onChange={(e) => saveIngredientEdit(ing.id, { vendor: e.target.value })}
+                                className="w-full px-1 py-0.5 border rounded text-sm"
+                              >
+                                {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                              </select>
+                            </td>
+                          );
+                        }
+                        if (col === 'category') {
+                          return (
+                            <td key={col} className="p-1 border">
+                              <select
+                                defaultValue={ing.category || ''}
+                                onChange={(e) => saveIngredientEdit(ing.id, { category: e.target.value })}
+                                className="w-full px-1 py-0.5 border rounded text-sm"
+                              >
+                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </td>
+                          );
+                        }
+                        if (col === 'subcategory') {
+                          return (
+                            <td key={col} className="p-1 border">
+                              <select
+                                defaultValue={ing.subcategory || ''}
+                                onChange={(e) => saveIngredientEdit(ing.id, { subcategory: e.target.value })}
+                                className="w-full px-1 py-0.5 border rounded text-sm"
+                              >
+                                <option value="">-</option>
+                                {(categoryStructure[ing.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                            </td>
+                          );
+                        }
+                        if (col === 'casePrice') {
+                          return (
+                            <td key={col} className="p-1 border">
+                              <input
+                                type="number"
+                                step="0.01"
+                                defaultValue={ing.casePrice || 0}
+                                onBlur={(e) => saveIngredientEdit(ing.id, { casePrice: parseFloat(e.target.value) || 0 })}
+                                className="w-20 px-1 py-0.5 border rounded text-sm text-right"
+                              />
+                            </td>
+                          );
+                        }
+                        // Text input for other editable fields
+                        return (
+                          <td key={col} className="p-1 border">
+                            <input
+                              type="text"
+                              defaultValue={ing[col] || ''}
+                              onBlur={(e) => saveIngredientEdit(ing.id, { [col]: e.target.value })}
+                              className={`w-full px-1 py-0.5 border rounded text-sm ${def.align === 'right' ? 'text-right' : ''}`}
+                            />
                           </td>
                         );
                       }
