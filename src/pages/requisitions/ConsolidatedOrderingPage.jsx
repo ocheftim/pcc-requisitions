@@ -862,13 +862,21 @@ export default function ConsolidatedOrderingPage() {
                 </tr>
               </thead>
               <tbody>
-                ${req.items.sort((a, b) => a.name.localeCompare(b.name)).map(item => `
-                  <tr>
-                    <td>${item.name}</td>
-                    <td>${parseFloat(item.quantity).toFixed(2)}</td>
-                    <td>${item.unit}</td>
-                  </tr>
-                `).join('')}
+                ${(() => {
+                  // Aggregate items within this requisition
+                  const aggregated = {};
+                  req.items.forEach(item => {
+                    const key = item.name + '|' + item.unit;
+                    if (!aggregated[key]) {
+                      aggregated[key] = { name: item.name, quantity: 0, unit: item.unit };
+                    }
+                    aggregated[key].quantity += parseFloat(item.quantity) || 0;
+                  });
+                  return Object.values(aggregated)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(item => '<tr><td>' + item.name + '</td><td>' + item.quantity.toFixed(2) + '</td><td>' + item.unit + '</td></tr>')
+                    .join('');
+                })()}
               </tbody>
             </table>
           </div>
@@ -889,9 +897,19 @@ export default function ConsolidatedOrderingPage() {
   // Email confirmation (opens email client)
   const emailConfirmation = (conf) => {
     const classDetails = conf.requisitions.map(req => {
-      const ingredientList = req.items
+      // Aggregate items within this requisition
+      const aggregated = {};
+      req.items.forEach(item => {
+        const key = `${item.name}|${item.unit}`;
+        if (!aggregated[key]) {
+          aggregated[key] = { name: item.name, quantity: 0, unit: item.unit };
+        }
+        aggregated[key].quantity += parseFloat(item.quantity) || 0;
+      });
+      
+      const ingredientList = Object.values(aggregated)
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map(item => `    - ${item.name}: ${parseFloat(item.quantity).toFixed(2)} ${item.unit}`)
+        .map(item => `    - ${item.name}: ${item.quantity.toFixed(2)} ${item.unit}`)
         .join('\n');
       
       return `• ${req.course || 'Unknown'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}\n  Ingredients:\n${ingredientList}`;
