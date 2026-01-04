@@ -779,12 +779,15 @@ export default function ConsolidatedOrderingPage() {
           </tbody>
         </table>
         <div class="total">Total: $${itemsToOrder.reduce((sum, i) => sum + i.estCost, 0).toFixed(2)}</div>
-        <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
+        <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print Again</button>
       </body>
       </html>
     `);
     printWindow.document.close();
-    setTimeout(() => printWindow.focus(), 100);
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 100);
   };
 
   // Generate instructor confirmations from filtered requisitions
@@ -962,12 +965,15 @@ export default function ConsolidatedOrderingPage() {
         `).join('');
         })()}
         
-        <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
+        <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print Again</button>
       </body>
       </html>
     `);
     printWindow.document.close();
-    setTimeout(() => printWindow.focus(), 100);
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 100);
   };
 
   // Email confirmation (opens email client)
