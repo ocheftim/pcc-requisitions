@@ -32,6 +32,28 @@ const CartIcon = () => (
 );
 
 // ===========================================
+// COURSE NAME LOOKUP
+// ===========================================
+const courseNames = {
+  'CUL130': 'Savory Cuisine',
+  'CUL140': 'Culinary Principles',
+  'CUL150': 'Garde Manger',
+  'CUL160': 'Bakery & Pastry Production I',
+  'CUL162': 'Art of Chocolate',
+  'CUL163': 'Sauces',
+  'CUL168': 'Specialty and Hearth Breads',
+  'CUL244': 'Confections, Show Pcs, Desserts',
+  'CUL260': 'Pastry Arts II',
+  'CUL266': 'Ice Cream, Bavarian, Mousse',
+  'CUL276': 'Pastry Production'
+};
+
+const getCourseName = (code) => {
+  const c = (code || '').replace(/\s+/g, '').toUpperCase();
+  return courseNames[c] ? `${code} ${courseNames[c]}` : code || 'Unknown Course';
+};
+
+// ===========================================
 // EP → AP CONVERSION UTILITIES
 // ===========================================
 
@@ -906,26 +928,7 @@ export default function ConsolidatedOrderingPage() {
           <p><strong>Week:</strong> ${filterWeek || 'All Weeks'}</p>
         </div>
         
-        ${(() => {
-          // Course name lookup
-          const courseNames = {
-            'CUL130': 'Savory Cuisine',
-            'CUL140': 'Culinary Principles',
-            'CUL150': 'Garde Manger',
-            'CUL160': 'Bakery & Pastry Production I',
-            'CUL162': 'Art of Chocolate',
-            'CUL163': 'Sauces',
-            'CUL168': 'Specialty and Hearth Breads',
-            'CUL244': 'Confections, Show Pcs, Desserts',
-            'CUL260': 'Pastry Arts II',
-            'CUL266': 'Ice Cream, Bavarian, Mousse',
-            'CUL276': 'Pastry Production'
-          };
-          const getCourseName = (code) => {
-            const c = (code || '').replace(/\s+/g, '').toUpperCase();
-            return courseNames[c] ? code + ' ' + courseNames[c] : code || 'Unknown Course';
-          };
-          return processedReqs.map(req => `
+        ${processedReqs.map(req => `
           <div class="class-block">
             <div class="class-header">${getCourseName(req.course)} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
             <div class="class-meta">
@@ -962,8 +965,7 @@ export default function ConsolidatedOrderingPage() {
               </tbody>
             </table>
           </div>
-        `).join('');
-        })()}
+        `).join('')}
         
         <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print Again</button>
       </body>
@@ -994,7 +996,7 @@ export default function ConsolidatedOrderingPage() {
         .map(item => `    - ${item.name}: ${item.quantity.toFixed(2)} ${item.unit}`)
         .join('\n');
       
-      return `• ${req.course || 'Unknown'} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}\n  Ingredients:\n${ingredientList}`;
+      return `• ${getCourseName(req.course)} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}\n  Ingredients:\n${ingredientList}`;
     }).join('\n\n');
     
     const subject = encodeURIComponent(`Order Confirmation - ${filterWeek || 'Upcoming'}`);
@@ -1590,7 +1592,7 @@ export default function ConsolidatedOrderingPage() {
                             <div key={reqIdx} className="mb-4 last:mb-0 pb-4 last:pb-0 border-b last:border-b-0">
                               <div className="flex justify-between items-start mb-2">
                                 <div>
-                                  <span className="font-semibold text-blue-700">{req.course || 'Unknown Course'}</span>
+                                  <span className="font-semibold text-blue-700">{getCourseName(req.course)}</span>
                                   <span className="mx-2 text-gray-400">•</span>
                                   <span className="text-gray-600">{req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</span>
                                 </div>
