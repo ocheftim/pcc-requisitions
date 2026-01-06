@@ -671,10 +671,21 @@ export default function ConsolidatedOrderingPage() {
           .update({ 
             case_price: item.casePrice,
             vendor_description: item.description,
-            item_number: item.supc
+            item_number: item.supc,
+            pack_size: item.packSize
           })
           .eq('ingredient_name', item.ingredientName)
           .eq('vendor', 'Sysco');
+        
+        // Sync to main ingredients table (keep in sync)
+        await supabase
+          .from('ingredients')
+          .update({ 
+            case_price: item.casePrice,
+            pack_size: item.packSize,
+            updated_at: now
+          })
+          .eq('name', item.ingredientName);
       }
       
       // Reload inventory

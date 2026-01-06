@@ -86,31 +86,87 @@ export default function IngredientsPage() {
 
   const loadIngredients = async () => {
     try {
-      const { data, error } = await supabase.from('ingredients').select('*').order('name');
-      if (error) throw error;
-      const mapped = data.map(row => ({
-        id: row.id,
-        name: row.name,
-        category: row.category,
-        subcategory: row.subcategory,
-        unit: row.unit,
-        vendor: row.vendor || 'Sysco',
-        vendorCode: row.vendor_code,
-        packSize: row.pack_size,
-        casePrice: row.case_price || 0,
-        unitPrice: row.unit_price || 0,
-        brand: row.brand,
-        programs: row.programs || ['Baking & Pastry Arts', 'Culinary Arts', 'Foodservice'],
-        storage: row.storage,
-        lastUpdated: row.updated_at,
-        hiddenFromInstructor: row.hidden_from_instructor
-      }));
+      // Load core ingredients
+      const { data: ingredientsData, error: ingError } = await supabase
+        .from('ingredients')
+        .select('*')
+        .order('name');
+      if (ingError) throw ingError;
+
+      // Load vendor data (prefer is_preferred, then Sysco)
+      const { data: vendorsData, error: vendorError } = await supabase
+        .from('ingredient_vendors')
+        .select('*')
+        .order('is_preferred', { ascending: false });
+      if (vendorError) throw vendorError;
+
+      // Group vendors by ingredient name, pick preferred
+      const vendorMap = {};
+      (vendorsData || []).forEach(v => {
+        if (!vendorMap[v.ingredient_name]) {
+          vendorMap[v.ingredient_name] = v;
+        } else if (v.is_preferred && !vendorMap[v.ingredient_name].is_preferred) {
+          vendorMap[v.ingredient_name] = v;
+        }
+      });
+
+      // Load inventory data
+      const { data: inventoryData, error: invError } = await supabase
+        .from('inventory_current')
+        .select('ingredient_name, quantity, last_counted');
+      if (invError) throw invError;
+
+      const inventoryMap = {};
+      (inventoryData || []).forEach(i => {
+        inventoryMap[i.ingredient_name] = {
+          onHand: i.quantity,
+          lastCounted: i.last_counted
+        };
+      });
+
+      // Merge all data
+      const mapped = ingredientsData.map(row => {
+        const vendor = vendorMap[row.name] || {};
+        const inv = inventoryMap[row.name] || {};
+        return {
+          id: row.id,
+          name: row.name,
+          category: row.category,
+          subcategory: row.subcategory,
+          unit: row.unit,
+          vendor: vendor.vendor || row.vendor || '-',
+          itemNumber: vendor.item_number || row.vendor_code || '',
+          vendorDescription: vendor.vendor_description || '',
+          packSize: vendor.pack_size || row.pack_size || '',
+          casePrice: vendor.case_price || row.case_price || 0,
+          unitPrice: row.unit_price || 0,
+          brand: row.brand,
+          programs: row.programs || ['Baking & Pastry Arts', 'Culinary Arts', 'Foodservice'],
+          storage: row.storage,
+          onHand: inv.onHand,
+          lastCounted: inv.lastCounted,
+          lastUpdated: row.updated_at,
+          hiddenFromInstructor: row.hidden_from_instructor
+        };
+      });
       setIngredients(mapped);
       const hidden = new Set(mapped.filter(i => i.hiddenFromInstructor).map(i => i.id));
       setInstructorHidden(hidden);
     } catch (err) {
       console.error('Error loading ingredients:', err);
     }
+  };
+
+  // Format last counted date
+  const formatLastCounted = (dateStr) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   // Calculate unit price from pack size
@@ -585,10 +641,12 @@ export default function IngredientsPage() {
                     <th className="w-6 p-1"></th>
                     <th className="w-8 p-2"></th>
                     <th className="text-left px-3 py-2">Item</th>
-                    <th className="text-left px-3 py-2 w-20">Unit</th>
-                    <th className="text-right px-3 py-2 w-24">Case $</th>
-                    <th className="text-right px-3 py-2 w-20">$/Unit</th>
-                    <th className="w-16 p-2 text-center">Prog</th>
+                    <th className="text-left px-3 py-2 w-20">Vendor</th>
+                    <th className="text-left px-3 py-2 w-24">Item #</th>
+                    <th className="text-left px-3 py-2 w-20">Pack</th>
+                    <th className="text-right px-3 py-2 w-20">Case $</th>
+                    <th className="text-center px-3 py-2 w-16">On Hand</th>
+                    <th className="text-center px-3 py-2 w-20">Updated</th>
                     <th className="w-12 p-2"></th>
                   </tr>
                 </thead>
@@ -596,15 +654,13 @@ export default function IngredientsPage() {
                   {Object.entries(subcategories).map(([subcategory, items]) => (
                     <React.Fragment key={subcategory}>
                       <tr className="bg-blue-50">
-                        <td colSpan={8} className="px-4 py-2 font-semibold text-blue-600 border-l-4 border-blue-400">
+                        <td colSpan={10} className="px-4 py-2 font-semibold text-blue-600 border-l-4 border-blue-400">
                           {subcategory} ({items.length})
                         </td>
                       </tr>
                       {items.map(item => {
                         const isSelected = selectedItems.has(item.id);
-                        const isHidden = instructorHidden.has(item.id);
                         const casePrice = item.casePrice || 0;
-                        const unitPrice = calculateUnitPriceFromPack(item) || item.unitPrice || 0;
                         return (
                           <tr key={item.id} className={`border-t border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-green-50' : ''} `}>
                             <td className="p-1 text-center cursor-grab text-gray-400 hover:text-gray-600">⋮⋮</td>
@@ -614,75 +670,23 @@ export default function IngredientsPage() {
                               </button>
                             </td>
                             <td className="px-3 py-2">
-                              {editMode ? (
-                                <div className="space-y-1">
-                                  <input
-                                    type="text"
-                                    defaultValue={item.name}
-                                    onBlur={(e) => saveIngredientEdit(item.id, { name: e.target.value })}
-                                    className="w-full px-2 py-1 border rounded text-sm font-semibold"
-                                  />
-                                  <div className="flex gap-1 flex-wrap">
-                                    <input
-                                      type="text"
-                                      defaultValue={item.vendorCode || ''}
-                                      onBlur={(e) => saveIngredientEdit(item.id, { vendorCode: e.target.value })}
-                                      className="w-16 px-1 py-0.5 border rounded text-xs"
-                                      placeholder="Item #"
-                                    />
-                                    <select
-                                      defaultValue={item.vendor || 'Sysco'}
-                                      onChange={(e) => saveIngredientEdit(item.id, { vendor: e.target.value })}
-                                      className="w-24 px-1 py-0.5 border rounded text-xs"
-                                    >
-                                      {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-                                    </select>
-                                    <input
-                                      type="text"
-                                      defaultValue={item.packSize || ''}
-                                      onBlur={(e) => saveIngredientEdit(item.id, { packSize: e.target.value })}
-                                      className="w-16 px-1 py-0.5 border rounded text-xs"
-                                      placeholder="Pack"
-                                    />
-                                    <input
-                                      type="text"
-                                      defaultValue={item.brand || ''}
-                                      onBlur={(e) => saveIngredientEdit(item.id, { brand: e.target.value })}
-                                      className="w-20 px-1 py-0.5 border rounded text-xs"
-                                      placeholder="Brand"
-                                    />
-                                  </div>
-                                </div>
+                              <div className="font-semibold text-gray-900">{item.name}</div>
+                              <div className="text-xs text-gray-500">{item.unit} {item.vendorDescription ? `• ${item.vendorDescription}` : ''}</div>
+                            </td>
+                            <td className="px-3 py-2 text-gray-600 text-sm">{item.vendor || '-'}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-500">{item.itemNumber || '-'}</td>
+                            <td className="px-3 py-2 text-gray-600 text-xs">{item.packSize || '-'}</td>
+                            <td className="px-3 py-2 text-right">${casePrice.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-center">
+                              {item.onHand !== null && item.onHand !== undefined ? (
+                                <span className={`font-medium ${item.onHand > 0 ? 'text-green-600' : 'text-gray-400'}`}>{item.onHand}</span>
                               ) : (
-                                <>
-                                  <div className="font-semibold text-gray-900">{item.name}</div>
-                                  <div className="text-xs text-gray-500">{item.vendorCode || '0000000'} | {item.vendor || '-'} | {item.packSize || '-'} | {item.brand || '-'}</div>
-                                </>
+                                <span className="text-gray-300">-</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-gray-600">
-                              {editMode ? (
-                                <input
-                                  type="text"
-                                  defaultValue={item.unit}
-                                  onBlur={(e) => saveIngredientEdit(item.id, { unit: e.target.value })}
-                                  className="w-14 px-1 py-0.5 border rounded text-sm"
-                                />
-                              ) : item.unit}
+                            <td className="px-3 py-2 text-center text-xs text-gray-400">
+                              {formatLastCounted(item.lastCounted)}
                             </td>
-                            <td className="px-3 py-2 text-right">
-                              {editMode ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  defaultValue={casePrice}
-                                  onBlur={(e) => saveIngredientEdit(item.id, { casePrice: parseFloat(e.target.value) || 0 })}
-                                  className="w-20 px-1 py-0.5 border rounded text-sm text-right"
-                                />
-                              ) : `$${casePrice.toFixed(2)}`}
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium text-green-700">${unitPrice.toFixed(4)}</td>
-                            <td className="p-2 text-center text-xs">{(item.programs || []).map(p => p === 'Baking & Pastry Arts' ? 'B' : p === 'Culinary Arts' ? 'C' : 'F').join('')}</td>
                             <td className="p-2 text-center relative">
                               <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === item.id ? null : item.id); }} className="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded">⋮</button>
                               {openMenuId === item.id && (
