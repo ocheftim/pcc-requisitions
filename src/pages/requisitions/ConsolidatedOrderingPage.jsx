@@ -274,6 +274,12 @@ export default function ConsolidatedOrderingPage() {
   const [vendorAlternatives, setVendorAlternatives] = useState({}); // Alternative vendors per ingredient
   const [vendorOverrides, setVendorOverrides] = useState({}); // Selected vendor overrides
   const [showConfirmations, setShowConfirmations] = useState(false); // Show instructor confirmations modal
+  
+  // Invoice upload modal state
+  const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceMatches, setInvoiceMatches] = useState([]);
+  const [processingInvoice, setProcessingInvoice] = useState(false);
 
   // Load vendor alternatives from Supabase
   const loadVendorAlternatives = async () => {
@@ -400,6 +406,19 @@ export default function ConsolidatedOrderingPage() {
     return inv.quantity;
   };
 
+  // Get last counted date for an item
+  const getLastCounted = (itemName) => {
+    const inv = inventory[itemName];
+    if (!inv || !inv.lastCounted) return null;
+    const date = new Date(inv.lastCounted);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
   // Get manual order override
   const getOrderOverride = (vendor, itemName) => {
     const key = `${vendor}:${itemName}`;
@@ -449,6 +468,228 @@ export default function ConsolidatedOrderingPage() {
       console.error('Error clearing inventory:', error);
     }
     setSavingInventory(false);
+  };
+
+  // Parse Sysco invoice CSV
+  const parseSyscoInvoice = (csvText) => {
+    const lines = csvText.split('\n').filter(l => l.trim());
+    let invoiceInfo = {};
+    const items = [];
+    
+    for (const line of lines) {
+      // Parse CSV properly handling quoted fields
+      const parts = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          parts.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      parts.push(current.trim());
+      
+      if (parts[0] === 'H') {
+        // Header line: H,O0601,049,699207,"Dec 12 2025 05:08 PM",01/06/2026,N,," ",04843987,04843987,1715.33,25,SUBMITTED
+        invoiceInfo = {
+          orderDate: parts[4],
+          deliveryDate: parts[5],
+          invoiceNumber: parts[9] || parts[10],
+          totalAmount: parseFloat(parts[11]) || 0,
+          itemCount: parseInt(parts[12]) || 0,
+          status: parts[13]
+        };
+      } else if (parts[0] === 'P') {
+        // Product line: P,7644909,4,0,,"1/35 LB","SYS PRM","Fry On Shortening Frying Liquid",,N,61.75,
+        items.push({
+          supc: parts[1],
+          caseQty: parseInt(parts[2]) || 0,
+          splitQty: parseInt(parts[3]) || 0,
+          packSize: parts[5],
+          brand: parts[6],
+          description: parts[7],
+          casePrice: parseFloat(parts[10]) || 0,
+          eachPrice: parseFloat(parts[11]) || 0
+        });
+      }
+    }
+    
+    return { invoiceInfo, items };
+  };
+
+  // Match invoice items to our ingredients
+  const matchInvoiceItems = async (items) => {
+    // Get all vendor records to match by SUPC
+    const { data: vendors } = await supabase
+      .from('ingredient_vendors')
+      .select('ingredient_name, item_number, vendor_description')
+      .eq('vendor', 'Sysco');
+    
+    const vendorMap = {};
+    (vendors || []).forEach(v => {
+      if (v.item_number) vendorMap[v.item_number] = v;
+    });
+    
+    // Get all ingredients for fuzzy matching
+    const { data: allIngredients } = await supabase
+      .from('ingredients')
+      .select('name');
+    
+    const ingredientNames = (allIngredients || []).map(i => i.name.toLowerCase());
+    
+    return items.map(item => {
+      // Try exact SUPC match first
+      const vendorMatch = vendorMap[item.supc];
+      if (vendorMatch) {
+        return {
+          ...item,
+          matched: true,
+          matchType: 'supc',
+          ingredientName: vendorMatch.ingredient_name,
+          confidence: 'high'
+        };
+      }
+      
+      // Try fuzzy match on description
+      const desc = item.description.toLowerCase();
+      let bestMatch = null;
+      let bestScore = 0;
+      
+      for (const name of ingredientNames) {
+        // Simple word matching
+        const descWords = desc.split(/\s+/);
+        const nameWords = name.split(/[\s,]+/);
+        let matches = 0;
+        for (const nw of nameWords) {
+          if (descWords.some(dw => dw.includes(nw) || nw.includes(dw))) matches++;
+        }
+        const score = matches / nameWords.length;
+        if (score > bestScore && score >= 0.5) {
+          bestScore = score;
+          bestMatch = (allIngredients || []).find(i => i.name.toLowerCase() === name)?.name;
+        }
+      }
+      
+      if (bestMatch) {
+        return {
+          ...item,
+          matched: true,
+          matchType: 'fuzzy',
+          ingredientName: bestMatch,
+          confidence: bestScore >= 0.8 ? 'high' : 'medium'
+        };
+      }
+      
+      return {
+        ...item,
+        matched: false,
+        matchType: 'none',
+        ingredientName: '',
+        confidence: 'none'
+      };
+    });
+  };
+
+  // Handle invoice file upload
+  const handleInvoiceUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const text = await file.readAsText ? await file.readAsText() : await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.readAsText(file);
+    });
+    
+    const parsed = parseSyscoInvoice(text);
+    setInvoiceData(parsed);
+    
+    const matches = await matchInvoiceItems(parsed.items);
+    setInvoiceMatches(matches);
+    setShowInvoiceUpload(true);
+  };
+
+  // Process invoice - update inventory and create transactions
+  const processInvoice = async () => {
+    setProcessingInvoice(true);
+    const now = new Date().toISOString();
+    
+    try {
+      for (const item of invoiceMatches) {
+        if (!item.matched || !item.ingredientName) continue;
+        
+        const qty = item.caseQty + (item.splitQty > 0 ? item.splitQty / 6 : 0); // Approximate split as fraction
+        
+        // Create transaction record
+        await supabase.from('inventory_transactions').insert({
+          ingredient_name: item.ingredientName,
+          transaction_type: 'received',
+          quantity: qty,
+          unit: 'case',
+          vendor: 'Sysco',
+          vendor_item_number: item.supc,
+          unit_cost: item.casePrice,
+          invoice_number: invoiceData.invoiceInfo.invoiceNumber,
+          invoice_date: invoiceData.invoiceInfo.deliveryDate,
+          notes: `${item.packSize} - ${item.description}`
+        });
+        
+        // Update or insert inventory_current
+        const { data: existing } = await supabase
+          .from('inventory_current')
+          .select('quantity')
+          .eq('ingredient_name', item.ingredientName)
+          .single();
+        
+        if (existing) {
+          await supabase
+            .from('inventory_current')
+            .update({ 
+              quantity: (existing.quantity || 0) + qty,
+              last_counted: now
+            })
+            .eq('ingredient_name', item.ingredientName);
+        } else {
+          await supabase
+            .from('inventory_current')
+            .insert({
+              ingredient_name: item.ingredientName,
+              quantity: qty,
+              unit: 'case',
+              last_counted: now
+            });
+        }
+        
+        // Update vendor price if changed
+        await supabase
+          .from('ingredient_vendors')
+          .update({ 
+            case_price: item.casePrice,
+            vendor_description: item.description,
+            item_number: item.supc
+          })
+          .eq('ingredient_name', item.ingredientName)
+          .eq('vendor', 'Sysco');
+      }
+      
+      // Reload inventory
+      await loadInventory();
+      
+      setShowInvoiceUpload(false);
+      setInvoiceData(null);
+      setInvoiceMatches([]);
+      alert(`✓ Processed ${invoiceMatches.filter(m => m.matched).length} items from invoice`);
+    } catch (error) {
+      console.error('Error processing invoice:', error);
+      alert('Error processing invoice: ' + error.message);
+    }
+    
+    setProcessingInvoice(false);
   };
 
   useEffect(() => { loadData(); loadArchivedOrders(); loadInventory(); loadVendorAlternatives(); }, []);
@@ -1051,6 +1292,15 @@ export default function ConsolidatedOrderingPage() {
             >
               📋 Confirmations
             </button>
+            <label className="px-4 py-2 rounded font-medium transition-colors bg-purple-600 text-white hover:bg-purple-700 cursor-pointer">
+              📥 Upload Invoice
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleInvoiceUpload}
+                className="hidden"
+              />
+            </label>
           </div>
         </div>
 
@@ -1345,6 +1595,9 @@ export default function ConsolidatedOrderingPage() {
                                   placeholder="-"
                                   className="w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                                 />
+                                {getLastCounted(item.name) && (
+                                  <div className="text-xs text-gray-400 mt-0.5">{getLastCounted(item.name)}</div>
+                                )}
                               </td>
                               <td className="px-4 py-2 text-center bg-blue-50">
                                 <input
@@ -1513,6 +1766,9 @@ export default function ConsolidatedOrderingPage() {
                                       placeholder="-"
                                       className="w-16 px-2 py-1 text-center border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                                     />
+                                    {getLastCounted(item.name) && (
+                                      <div className="text-xs text-gray-400 mt-0.5">{getLastCounted(item.name)}</div>
+                                    )}
                                   </td>
                                   <td className="px-4 py-2 text-center bg-blue-50">
                                     <input
@@ -1670,6 +1926,112 @@ export default function ConsolidatedOrderingPage() {
                     className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
                   >
                     Print All
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Invoice Upload Modal */}
+        {showInvoiceUpload && invoiceData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+              <div className="px-6 py-4 border-b bg-purple-50">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-purple-900">📥 Import Sysco Invoice</h2>
+                  <button onClick={() => { setShowInvoiceUpload(false); setInvoiceData(null); setInvoiceMatches([]); }} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+                </div>
+                <div className="mt-2 flex gap-4 text-sm">
+                  <span><strong>Invoice #:</strong> {invoiceData.invoiceInfo.invoiceNumber}</span>
+                  <span><strong>Delivery:</strong> {invoiceData.invoiceInfo.deliveryDate}</span>
+                  <span><strong>Total:</strong> ${invoiceData.invoiceInfo.totalAmount?.toFixed(2)}</span>
+                  <span><strong>Items:</strong> {invoiceData.invoiceInfo.itemCount}</span>
+                </div>
+              </div>
+              
+              <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 text-left">SUPC</th>
+                      <th className="px-4 py-2 text-left">Invoice Description</th>
+                      <th className="px-4 py-2 text-center">Qty</th>
+                      <th className="px-4 py-2 text-right">Price</th>
+                      <th className="px-4 py-2 text-left">→ Matched Ingredient</th>
+                      <th className="px-4 py-2 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceMatches.map((item, idx) => (
+                      <tr key={idx} className={`border-b ${item.matched ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <td className="px-4 py-2 font-mono text-gray-500">{item.supc}</td>
+                        <td className="px-4 py-2">
+                          <div className="font-medium">{item.description}</div>
+                          <div className="text-xs text-gray-500">{item.brand} • {item.packSize}</div>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          {item.caseQty > 0 && <span className="font-medium">{item.caseQty} cs</span>}
+                          {item.splitQty > 0 && <span className="text-gray-500 ml-1">+{item.splitQty} split</span>}
+                        </td>
+                        <td className="px-4 py-2 text-right">${item.casePrice?.toFixed(2) || item.eachPrice?.toFixed(2)}</td>
+                        <td className="px-4 py-2">
+                          {item.matched ? (
+                            <div>
+                              <span className="font-medium text-green-700">{item.ingredientName}</span>
+                              <span className={`ml-2 text-xs px-1 rounded ${item.confidence === 'high' ? 'bg-green-200' : 'bg-yellow-200'}`}>
+                                {item.matchType === 'supc' ? 'SUPC' : 'fuzzy'}
+                              </span>
+                            </div>
+                          ) : (
+                            <select 
+                              className="w-full px-2 py-1 border rounded text-sm"
+                              value={item.ingredientName}
+                              onChange={(e) => {
+                                const updated = [...invoiceMatches];
+                                updated[idx] = { ...item, ingredientName: e.target.value, matched: !!e.target.value, matchType: 'manual' };
+                                setInvoiceMatches(updated);
+                              }}
+                            >
+                              <option value="">-- Select ingredient --</option>
+                              {ingredients.sort((a, b) => a.name.localeCompare(b.name)).map(ing => (
+                                <option key={ing.id} value={ing.name}>{ing.name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          {item.matched ? (
+                            <span className="text-green-600">✓</span>
+                          ) : (
+                            <span className="text-red-500">?</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="px-6 py-4 border-t bg-gray-50 flex justify-between items-center">
+                <div className="text-sm">
+                  <span className="text-green-600 font-medium">✓ {invoiceMatches.filter(m => m.matched).length} matched</span>
+                  <span className="mx-2">•</span>
+                  <span className="text-red-500">{invoiceMatches.filter(m => !m.matched).length} unmatched</span>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setShowInvoiceUpload(false); setInvoiceData(null); setInvoiceMatches([]); }}
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={processInvoice}
+                    disabled={processingInvoice || invoiceMatches.filter(m => m.matched).length === 0}
+                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {processingInvoice ? 'Processing...' : `Import ${invoiceMatches.filter(m => m.matched).length} Items`}
                   </button>
                 </div>
               </div>
