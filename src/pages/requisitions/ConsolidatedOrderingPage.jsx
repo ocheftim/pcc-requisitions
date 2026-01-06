@@ -1123,12 +1123,39 @@ export default function ConsolidatedOrderingPage() {
             
             {/* Filter Summary & Actions */}
             <div className="flex justify-between items-center mt-3 pt-3 border-t">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 flex gap-4">
                 {hasActiveFilters && (
                   <span className="text-blue-600 font-medium">
                     Filtered: {filteredRequisitions.length} of {requisitions.length} requisitions
                   </span>
                 )}
+                {/* Fulfillment Summary */}
+                {(() => {
+                  let totalItems = 0;
+                  let fulfilledItems = 0;
+                  Object.values(consolidateByVendor).forEach(vendorData => {
+                    vendorData.itemsList.forEach(item => {
+                      totalItems++;
+                      const onHand = getOnHand(vendorData.vendor || 'Unknown', item.name);
+                      const apCalc = calculateAPOrder(item.quantity, item.unit, item.caseSize);
+                      const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
+                      if (onHand !== '' && onHand >= calculatedOrder) {
+                        fulfilledItems++;
+                      }
+                    });
+                  });
+                  const remaining = totalItems - fulfilledItems;
+                  if (totalItems > 0) {
+                    return (
+                      <span className="flex gap-3">
+                        <span className="text-green-600">✓ {fulfilledItems} fulfilled</span>
+                        {remaining > 0 && <span className="text-orange-600">⏳ {remaining} remaining</span>}
+                        <span className="text-gray-400">({Math.round(fulfilledItems/totalItems*100)}%)</span>
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               <button onClick={saveToArchive} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
                 <SaveIcon />Save to Archive
@@ -1268,10 +1295,15 @@ export default function ConsolidatedOrderingPage() {
                             const estCost = hasInput ? effectiveOrder * activeCasePrice : null;
                             
                             return (
-                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasInput && effectiveOrder === 0 ? 'opacity-50' : ''}`}>
+                            <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasInput && effectiveOrder === 0 ? 'bg-green-50' : ''}`}>
                               <td className="px-4 py-2 font-mono text-gray-500">{activeItemNumber || '-'}</td>
                               <td className="px-4 py-2">
-                                <span className="font-medium">{item.name}</span>
+                                <span className={`font-medium ${hasInput && effectiveOrder === 0 ? 'line-through text-gray-400' : ''}`}>
+                                  {item.name}
+                                </span>
+                                {hasInput && effectiveOrder === 0 && (
+                                  <span className="ml-2 text-green-600 text-sm">✓</span>
+                                )}
                                 {item.isGrocery && (
                                   <span className="ml-2 text-amber-600 text-xs"><CartIcon /> Grocery</span>
                                 )}
@@ -1437,9 +1469,14 @@ export default function ConsolidatedOrderingPage() {
                               const estCost = hasInput ? effectiveOrder * activeCasePrice : null;
                               
                               return (
-                                <tr key={idx} className={`border-b hover:bg-gray-50 ${hasInput && effectiveOrder === 0 ? 'opacity-50' : ''}`}>
+                                <tr key={idx} className={`border-b hover:bg-gray-50 ${hasInput && effectiveOrder === 0 ? 'bg-green-50' : ''}`}>
                                   <td className="px-4 py-2">
-                                    <span className="font-medium">{item.name}</span>
+                                    <span className={`font-medium ${hasInput && effectiveOrder === 0 ? 'line-through text-gray-400' : ''}`}>
+                                      {item.name}
+                                    </span>
+                                    {hasInput && effectiveOrder === 0 && (
+                                      <span className="ml-2 text-green-600 text-sm">✓</span>
+                                    )}
                                     {hasAlternatives && (
                                       <select
                                         value={activeVendor}
