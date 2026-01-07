@@ -54,6 +54,16 @@ const getCourseName = (code) => {
 };
 
 // ===========================================
+// DATE FORMATTING HELPER (avoid timezone issues)
+// ===========================================
+const formatDate = (dateStr) => {
+  if (!dateStr) return 'No date';
+  // Add time to prevent timezone shift: '2026-01-16' → '2026-01-16T12:00:00'
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US');
+};
+
+// ===========================================
 // EP → AP CONVERSION UTILITIES
 // ===========================================
 
@@ -1182,7 +1192,7 @@ export default function ConsolidatedOrderingPage() {
         
         ${processedReqs.map(req => `
           <div class="class-block">
-            <div class="class-header">${getCourseName(req.course)} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</div>
+            <div class="class-header">${getCourseName(req.course)} - ${req.classDate ? formatDate(req.classDate) : 'No date'}</div>
             <div class="class-meta">
               <span><strong>Students:</strong> ${req.students}</span>
             </div>
@@ -1248,7 +1258,7 @@ export default function ConsolidatedOrderingPage() {
         .map(item => `    - ${item.name}: ${item.quantity.toFixed(2)} ${item.unit}`)
         .join('\n');
       
-      return `• ${getCourseName(req.course)} - ${req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}\n  Ingredients:\n${ingredientList}`;
+      return `• ${getCourseName(req.course)} - ${req.classDate ? formatDate(req.classDate) : 'No date'}\n  Students: ${req.students}\n  Recipes: ${req.recipes || 'None specified'}\n  Ingredients:\n${ingredientList}`;
     }).join('\n\n');
     
     const subject = encodeURIComponent(`Order Confirmation - ${filterWeek || 'Upcoming'}`);
@@ -1898,7 +1908,7 @@ export default function ConsolidatedOrderingPage() {
                                 <div>
                                   <span className="font-semibold text-blue-700">{getCourseName(req.course)}</span>
                                   <span className="mx-2 text-gray-400">•</span>
-                                  <span className="text-gray-600">{req.classDate ? new Date(req.classDate).toLocaleDateString() : 'No date'}</span>
+                                  <span className="text-gray-600">{req.classDate ? formatDate(req.classDate) : 'No date'}</span>
                                 </div>
                                 <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-sm">{req.students} students</span>
                               </div>
