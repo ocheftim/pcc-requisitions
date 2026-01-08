@@ -763,7 +763,7 @@ export default function ConsolidatedOrderingPage() {
         const key = start.toISOString().split("T")[0];
         if (!weekMap.has(key)) {
           const opts = { month: "short", day: "numeric" };
-          const label = "Week " + week + ": " + start.toLocaleDateString("en-US", opts) + " - " + end.toLocaleDateString("en-US", opts);
+          const label = start.toLocaleDateString("en-US", opts) + " - " + end.toLocaleDateString("en-US", opts);
           weekMap.set(key, { key, label, start, week, session });
         }
       }
@@ -1187,7 +1187,7 @@ export default function ConsolidatedOrderingPage() {
         <div class="header-info">
           <p><strong>Instructor:</strong> ${conf.instructor}</p>
           <p><strong>Generated:</strong> ${date}</p>
-          <p><strong>Week:</strong> ${filterWeek || 'All Weeks'}</p>
+          <p><strong>Order Period:</strong> ${filterWeek || 'All Periods'}</p>
         </div>
         
         ${processedReqs.map(req => `
@@ -1331,9 +1331,9 @@ export default function ConsolidatedOrderingPage() {
             <div className="flex flex-wrap gap-3 items-center">
               <label className="text-sm font-medium text-gray-600">Filters:</label>
               
-              {/* Week Filter */}
+              {/* Order Period Filter */}
               <select value={filterWeek || 'all'} onChange={(e) => setFilterWeek(e.target.value)} className="px-3 py-2 border rounded-lg text-sm font-medium">
-                <option value="all">All Weeks</option>
+                <option value="all">All Order Periods</option>
                 {filterOptions.weeks.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
               </select>
               
