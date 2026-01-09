@@ -45,7 +45,9 @@ const courseNames = {
   'CUL244': 'Confections, Show Pcs, Desserts',
   'CUL260': 'Pastry Arts II',
   'CUL266': 'Ice Cream, Bavarian, Mousse',
-  'CUL276': 'Pastry Production'
+  'CUL276': 'Pastry Production',
+  'CATERING': 'Catering Event',
+  'PD-WORKSHOP': 'Professional Development'
 };
 
 const getCourseName = (code) => {
@@ -718,9 +720,57 @@ export default function ConsolidatedOrderingPage() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load class requisitions
       const { data: reqs } = await supabase.from('requisitions').select('*').order('created_at', { ascending: false });
+      
+      // Load catering events (confirmed or inquiry status, with items)
+      const { data: events } = await supabase
+        .from('catering_events')
+        .select('*')
+        .in('status', ['confirmed', 'inquiry', 'quoted'])
+        .order('event_date', { ascending: true });
+      
+      // Load PD workshops (confirmed or planned, with items)
+      const { data: workshops } = await supabase
+        .from('pd_workshops')
+        .select('*')
+        .in('status', ['confirmed', 'planned'])
+        .order('workshop_date', { ascending: true });
+      
+      // Transform catering events to requisition format
+      const eventReqs = (events || []).filter(e => e.items && e.items.length > 0).map(e => ({
+        id: e.id,
+        course: 'CATERING',
+        class_date: e.event_date,
+        instructor: e.contact_name || 'Catering',
+        students: e.guest_count,
+        recipes: e.event_name,
+        items: e.items,
+        status: e.status,
+        source: 'catering',
+        event_type: e.event_type,
+        department: e.department
+      }));
+      
+      // Transform PD workshops to requisition format
+      const workshopReqs = (workshops || []).filter(w => w.items && w.items.length > 0).map(w => ({
+        id: w.id,
+        course: 'PD-WORKSHOP',
+        class_date: w.workshop_date,
+        instructor: w.leader || 'Staff',
+        students: w.attendee_count,
+        recipes: w.workshop_name,
+        items: w.items,
+        status: w.status,
+        source: 'pd',
+        target_audience: w.target_audience
+      }));
+      
+      // Combine all requisitions
+      const allReqs = [...(reqs || []), ...eventReqs, ...workshopReqs];
+      
       const { data: ings } = await supabase.from('ingredients').select('*');
-      setRequisitions(reqs || []);
+      setRequisitions(allReqs);
       setIngredients(ings || []);
     } catch (error) { console.error('Error loading data:', error); }
     setLoading(false);

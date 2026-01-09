@@ -7,9 +7,10 @@ import ConsolidatedOrderingPage from './pages/requisitions/ConsolidatedOrderingP
 import IngredientsPage from './pages/requisitions/IngredientsPage';
 import SettingsPage from './pages/requisitions/SettingsPage';
 import CateringWorkflowSystem from './pages/requisitions/CateringWorkflowSystem';
+import CateringEventsPage from './pages/requisitions/CateringEventsPage';
+import PDWorkshopsPage from './pages/requisitions/PDWorkshopsPage';
 import StandardizedRecipePage from './pages/requisitions/StandardizedRecipePage';
 import PullListPage from "./pages/requisitions/PullListPage";
-import AdminConsolidatedPage from "./pages/requisitions/AdminConsolidatedPage";
 import PrintRequisitionPage from "./pages/requisitions/PrintRequisitionPage";
 
 function Navigation() {
@@ -122,7 +123,29 @@ function Navigation() {
           </NavLink>
           
           <NavLink
-            to="/admin" className={({ isActive }) => `px-4 py-2 rounded-lg transition-colors ${isActive ? "bg-blue-600 text-white" : "text-blue-800 hover:bg-blue-100"}`}>Admin</NavLink><NavLink to="/settings"
+            to="/catering/events"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-green-600 text-white' : 'text-green-800 hover:bg-green-100'
+              }`
+            }
+          >
+            Events
+          </NavLink>
+          
+          <NavLink
+            to="/pd-workshops"
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-purple-600 text-white' : 'text-purple-800 hover:bg-purple-100'
+              }`
+            }
+          >
+            PD
+          </NavLink>
+          
+          <NavLink
+            to="/settings"
             className={({ isActive }) =>
               `px-4 py-2 rounded-lg transition-colors ${
                 isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
@@ -162,8 +185,9 @@ function App() {
           <Route path="/requisitions/print" element={<PrintRequisitionPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/catering" element={<CateringWorkflowSystem />} />
+          <Route path="/catering/events" element={<CateringEventsPage />} />
+          <Route path="/pd-workshops" element={<PDWorkshopsPage />} />
           <Route path="/recipes" element={<StandardizedRecipePage />} />
-          <Route path="/admin" element={<AdminConsolidatedPage />} />
           <Route path="/instructor-login" element={<InstructorLoginPage />} />
           <Route path="/instructor" element={<InstructorRequisitionPage hideNav={true} />} />
           <Route path="/requisitions/instructor" element={<InstructorRequisitionPage />} />
