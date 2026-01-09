@@ -303,13 +303,15 @@ export default function ConsolidatedOrderingPage() {
       
       if (error) throw error;
       
-      // Group by ingredient name
+      // Group by ingredient name (lowercase for case-insensitive matching)
       const altMap = {};
       (data || []).forEach(v => {
-        if (!altMap[v.ingredient_name]) {
-          altMap[v.ingredient_name] = [];
+        const key = v.ingredient_name?.toLowerCase();
+        if (!key) return;
+        if (!altMap[key]) {
+          altMap[key] = [];
         }
-        altMap[v.ingredient_name].push(v);
+        altMap[key].push(v);
       });
       setVendorAlternatives(altMap);
     } catch (error) {
@@ -319,11 +321,12 @@ export default function ConsolidatedOrderingPage() {
 
   // Get selected vendor for an item (override or default)
   const getSelectedVendor = (itemName) => {
-    if (vendorOverrides[itemName]) {
-      return vendorOverrides[itemName];
+    const key = itemName?.toLowerCase();
+    if (vendorOverrides[key]) {
+      return vendorOverrides[key];
     }
     // Return preferred vendor info if available
-    const alts = vendorAlternatives[itemName];
+    const alts = vendorAlternatives[key];
     if (alts && alts.length > 0) {
       const preferred = alts.find(v => v.is_preferred) || alts[0];
       return preferred;
@@ -333,9 +336,10 @@ export default function ConsolidatedOrderingPage() {
 
   // Set vendor override for an item
   const setVendorOverride = (itemName, vendorData) => {
+    const key = itemName?.toLowerCase();
     setVendorOverrides(prev => ({
       ...prev,
-      [itemName]: vendorData
+      [key]: vendorData
     }));
   };
 
@@ -1028,8 +1032,8 @@ export default function ConsolidatedOrderingPage() {
     
     // Calculate AP order quantities with on-hand, overrides, and vendor alternatives
     const itemsToOrder = items.map(item => {
-      // Check for vendor alternative
-      const alternatives = vendorAlternatives[item.name] || [];
+      // Check for vendor alternative (case-insensitive)
+      const alternatives = vendorAlternatives[item.name?.toLowerCase()] || [];
       const selectedVendorData = getSelectedVendor(item.name);
       
       // Use selected vendor's data if available
@@ -1582,8 +1586,8 @@ export default function ConsolidatedOrderingPage() {
                         </thead>
                         <tbody>
                           {data.itemsList.map((item, idx) => {
-                            // Check for vendor alternatives
-                            const alternatives = vendorAlternatives[item.name] || [];
+                            // Check for vendor alternatives (case-insensitive)
+                            const alternatives = vendorAlternatives[item.name?.toLowerCase()] || [];
                             const selectedVendorData = getSelectedVendor(item.name);
                             const hasAlternatives = alternatives.length > 1;
                             
@@ -1611,9 +1615,9 @@ export default function ConsolidatedOrderingPage() {
                               effectiveOrder = Math.max(0, calculatedOrder - onHand);
                             }
                             
-                            // Estimate cost based on case price - only show if On Hand or Order has been set
+                            // Estimate cost based on case price
                             const hasInput = onHand !== '' || orderOverride !== '';
-                            const estCost = hasInput ? effectiveOrder * activeCasePrice : null;
+                            const estCost = effectiveOrder * activeCasePrice;
                             
                             return (
                             <tr key={idx} className={`border-b hover:bg-gray-50 ${item.isGrocery ? 'bg-amber-50' : ''} ${hasInput && effectiveOrder === 0 ? 'bg-green-50' : ''}`}>
@@ -1674,7 +1678,7 @@ export default function ConsolidatedOrderingPage() {
                                 <input
                                   type="text"
                                   inputMode="numeric"
-                                  value={orderOverride !== '' ? orderOverride : (hasInput ? effectiveOrder : '')}
+                                  value={orderOverride !== '' ? orderOverride : effectiveOrder}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     if (val === '' || /^\d*$/.test(val)) {
@@ -1682,11 +1686,11 @@ export default function ConsolidatedOrderingPage() {
                                     }
                                   }}
                                   placeholder="-"
-                                  className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
+                                  className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${effectiveOrder > 0 ? 'text-blue-600' : 'text-green-600'}`}
                                 />
                                 <div className="text-xs text-gray-400">{activePackSize || ''}</div>
                               </td>
-                              <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
+                              <td className="px-4 py-2 text-right text-gray-500">{activeCasePrice > 0 ? `$${estCost.toFixed(2)}` : '-'}</td>
                             </tr>
                             );
                           })}
@@ -1765,8 +1769,8 @@ export default function ConsolidatedOrderingPage() {
                           </thead>
                           <tbody>
                             {catData.items.map((item, idx) => {
-                              // Check for vendor alternatives
-                              const alternatives = vendorAlternatives[item.name] || [];
+                              // Check for vendor alternatives (case-insensitive)
+                              const alternatives = vendorAlternatives[item.name?.toLowerCase()] || [];
                               const selectedVendorData = getSelectedVendor(item.name);
                               const hasAlternatives = alternatives.length > 1;
                               
@@ -1790,7 +1794,7 @@ export default function ConsolidatedOrderingPage() {
                               }
                               
                               const hasInput = onHand !== '' || orderOverride !== '';
-                              const estCost = hasInput ? effectiveOrder * activeCasePrice : null;
+                              const estCost = effectiveOrder * activeCasePrice;
                               
                               return (
                                 <tr key={idx} className={`border-b hover:bg-gray-50 ${hasInput && effectiveOrder === 0 ? 'bg-green-50' : ''}`}>
@@ -1845,7 +1849,7 @@ export default function ConsolidatedOrderingPage() {
                                     <input
                                       type="text"
                                       inputMode="numeric"
-                                      value={orderOverride !== '' ? orderOverride : (hasInput ? effectiveOrder : '')}
+                                      value={orderOverride !== '' ? orderOverride : effectiveOrder}
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         if (val === '' || /^\d*$/.test(val)) {
@@ -1853,11 +1857,11 @@ export default function ConsolidatedOrderingPage() {
                                         }
                                       }}
                                       placeholder="-"
-                                      className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${hasInput && effectiveOrder > 0 ? 'text-blue-600' : hasInput ? 'text-green-600' : 'text-gray-400'}`}
+                                      className={`w-16 px-2 py-1 text-center border rounded text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${effectiveOrder > 0 ? 'text-blue-600' : 'text-green-600'}`}
                                     />
                                     <div className="text-xs text-gray-400">{activePackSize || ''}</div>
                                   </td>
-                                  <td className="px-4 py-2 text-right text-gray-500">{estCost !== null ? `$${estCost.toFixed(2)}` : '-'}</td>
+                                  <td className="px-4 py-2 text-right text-gray-500">{activeCasePrice > 0 ? `$${estCost.toFixed(2)}` : '-'}</td>
                                 </tr>
                               );
                             })}
