@@ -112,7 +112,7 @@ function Navigation() {
           </NavLink>
           
           <NavLink
-            to="/catering"
+            to="/catering/events"
             className={({ isActive }) =>
               `px-4 py-2 rounded-lg transition-colors ${
                 isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
@@ -120,17 +120,6 @@ function Navigation() {
             }
           >
             Catering
-          </NavLink>
-          
-          <NavLink
-            to="/catering/events"
-            className={({ isActive }) =>
-              `px-4 py-2 rounded-lg transition-colors ${
-                isActive ? 'bg-green-600 text-white' : 'text-green-800 hover:bg-green-100'
-              }`
-            }
-          >
-            Events
           </NavLink>
           
           <NavLink
