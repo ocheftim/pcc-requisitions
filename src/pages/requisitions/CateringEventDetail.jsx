@@ -174,6 +174,29 @@ export default function CateringEventDetail() {
     return consolidated;
   }, [recipes, ingMap]);
 
+  // Helper to parse pack size (e.g., "6/5 lb" = 30 lb, "25 lb" = 25, "12 ct" = 12)
+  const parsePackSize = (packSize) => {
+    if (!packSize) return { qty: 1, unit: 'each' };
+    const str = packSize.toLowerCase().trim();
+    
+    // Pattern: "6/5 lb" = 6 units of 5 lb = 30 lb total
+    const slashMatch = str.match(/(\d+)\s*\/\s*(\d+\.?\d*)\s*(lb|oz|ct|each|gal|qt|pt)?/);
+    if (slashMatch) {
+      const count = parseFloat(slashMatch[1]);
+      const size = parseFloat(slashMatch[2]);
+      const unit = slashMatch[3] || 'each';
+      return { qty: count * size, unit };
+    }
+    
+    // Pattern: "25 lb" or "12 ct"
+    const simpleMatch = str.match(/(\d+\.?\d*)\s*(lb|oz|ct|each|gal|qt|pt|bunch)?/);
+    if (simpleMatch) {
+      return { qty: parseFloat(simpleMatch[1]), unit: simpleMatch[2] || 'each' };
+    }
+    
+    return { qty: 1, unit: 'each' };
+  };
+
   // Calculate recipe costs
   const recipeCosts = useMemo(() => {
     const costs = {};
@@ -186,11 +209,20 @@ export default function CateringEventDetail() {
       
       recipeIngs.forEach(item => {
         const ingInfo = ingMap[item.name?.toLowerCase()] || {};
-        // Estimate cost based on unit price or case price
-        if (ingInfo.unit_price) {
-          total += (parseFloat(item.quantity) || 0) * ingInfo.unit_price;
+        const qty = parseFloat(item.quantity) || 0;
+        
+        if (qty === 0) return;
+        
+        // Get cost per unit from case_price / pack_size
+        if (ingInfo.case_price && ingInfo.pack_size) {
+          const pack = parsePackSize(ingInfo.pack_size);
+          const costPerUnit = ingInfo.case_price / pack.qty;
+          total += qty * costPerUnit;
+        } else if (ingInfo.unit_price) {
+          // Fallback to unit_price (already cost per unit)
+          total += qty * ingInfo.unit_price;
         } else if (ingInfo.case_price) {
-          // Rough estimate: assume using fraction of case
+          // Last resort: estimate 1/4 case
           total += ingInfo.case_price * 0.25;
         }
       });
