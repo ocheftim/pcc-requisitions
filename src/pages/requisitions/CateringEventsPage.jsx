@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
 export default function CateringEventsPage() {
@@ -7,6 +8,7 @@ export default function CateringEventsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [ingredients, setIngredients] = useState([]);
+  const navigate = useNavigate();
   
   // Form state
   const [form, setForm] = useState({
@@ -275,6 +277,7 @@ export default function CateringEventsPage() {
                     <div className="font-bold text-lg text-green-600">${event.total_price?.toFixed(2)}</div>
                     <div className="text-xs text-gray-500">${event.price_per_person?.toFixed(2)}/person</div>
                     <div className="flex gap-2 mt-2">
+                      <button onClick={() => navigate(`/catering/${event.id}`)} className="px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">View</button>
                       <button onClick={() => openEditEvent(event)} className="px-2 py-1 text-sm bg-gray-100 rounded hover:bg-gray-200">Edit</button>
                       <button onClick={() => duplicateEvent(event)} className="px-2 py-1 text-sm bg-gray-100 rounded hover:bg-gray-200">Copy</button>
                       <button onClick={() => deleteEvent(event.id)} className="px-2 py-1 text-sm text-red-600 hover:bg-red-50 rounded">Delete</button>
