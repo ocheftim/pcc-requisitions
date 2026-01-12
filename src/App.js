@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import DashboardPage from './pages/DashboardPage';
 import InstructorRequisitionPage from './pages/requisitions/InstructorRequisitionPage';
 import InstructorLoginPage from './pages/requisitions/InstructorLoginPage';
 import MyRequisitionsPage from './pages/requisitions/MyRequisitionsPage';
@@ -11,6 +12,7 @@ import CateringEventsPage from './pages/requisitions/CateringEventsPage';
 import PDWorkshopsPage from './pages/requisitions/PDWorkshopsPage';
 import StandardizedRecipePage from './pages/requisitions/StandardizedRecipePage';
 import PullListPage from "./pages/requisitions/PullListPage";
+import CateringEventDetail from "./pages/requisitions/CateringEventDetail";
 import PrintRequisitionPage from "./pages/requisitions/PrintRequisitionPage";
 
 function Navigation() {
@@ -33,12 +35,24 @@ function Navigation() {
           </div>
         </div>
         <div className="flex space-x-1 py-2">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `px-4 py-2 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-blue-800 hover:bg-blue-100'
+              }`
+            }
+          >
+            Dashboard
+          </NavLink>
+          
           <div className="relative">
             <button
               onClick={() => setReqDropdownOpen(!reqDropdownOpen)}
               onBlur={() => setTimeout(() => setReqDropdownOpen(false), 150)}
               className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-1 ${
-                window.location.pathname.includes('/requisitions') || window.location.pathname === '/create' || window.location.pathname === '/'
+                window.location.pathname.includes('/requisitions') || window.location.pathname === '/create'
                   ? 'bg-blue-600 text-white'
                   : 'text-blue-800 hover:bg-blue-100'
               }`}
@@ -161,7 +175,8 @@ function App() {
       <div className="min-h-screen bg-gray-100">
         <NavigationWrapper />
         <Routes>
-          <Route path="/" element={<InstructorRequisitionPage />} />
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/create" element={<InstructorRequisitionPage />} />
           <Route path="/requisitions" element={<MyRequisitionsPage />} />
           <Route path="/requisitions/pending" element={<MyRequisitionsPage initialFilter="pending" />} />
@@ -175,6 +190,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/catering" element={<CateringWorkflowSystem />} />
           <Route path="/catering/events" element={<CateringEventsPage />} />
+          <Route path="/catering/:eventId" element={<CateringEventDetail />} />
           <Route path="/pd-workshops" element={<PDWorkshopsPage />} />
           <Route path="/recipes" element={<StandardizedRecipePage />} />
           <Route path="/instructor-login" element={<InstructorLoginPage />} />

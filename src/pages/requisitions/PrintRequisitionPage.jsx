@@ -16,7 +16,11 @@ export default function PrintRequisitionPage() {
   }
 
   const items = typeof req.items === 'string' ? JSON.parse(req.items) : (req.items || []);
+  const equipment = typeof req.equipment === 'string' ? JSON.parse(req.equipment) : (req.equipment || []);
   const totalCost = items.reduce((sum, item) => sum + (parseFloat(item.extended) || 0), 0);
+  
+  const students = parseInt(req.students) || 0;
+  const teams = students <= 8 ? Math.ceil(students / 2) : Math.ceil(students / 3);
 
   return (
     <div className="max-w-4xl mx-auto p-8 bg-white print:p-4">
@@ -44,11 +48,18 @@ export default function PrintRequisitionPage() {
         </div>
         <div>
           <p><strong>Week/Module:</strong> {req.week}</p>
-          <p><strong>Students:</strong> {req.students}</p>
+          <p><strong>Students:</strong> {req.students} ({teams} teams)</p>
           <p><strong>Budget:</strong> ${parseFloat(req.budget || 0).toFixed(2)}</p>
         </div>
       </div>
-      {req.recipes && <div className="mb-6"><p className="text-sm"><strong>Recipes:</strong> {req.recipes}</p></div>}
+      
+      {req.recipes && (
+        <div className="mb-6 p-3 bg-blue-50 rounded">
+          <p className="text-sm"><strong>Recipes:</strong> {req.recipes}</p>
+        </div>
+      )}
+
+      <h2 className="text-lg font-bold text-gray-800 mb-2">Ingredients</h2>
       <table className="w-full border-collapse text-sm mb-6">
         <thead>
           <tr className="bg-blue-50">
@@ -77,6 +88,47 @@ export default function PrintRequisitionPage() {
           </tr>
         </tfoot>
       </table>
+
+      {equipment.length > 0 && (
+        <>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Equipment</h2>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-2 py-1 text-left">Item</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center w-16">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipment.slice(0, Math.ceil(equipment.length / 2)).map((item, idx) => (
+                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="border border-gray-300 px-2 py-1">{item.name}</td>
+                    <td className="border border-gray-300 px-2 py-1 text-center">{item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-2 py-1 text-left">Item</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center w-16">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipment.slice(Math.ceil(equipment.length / 2)).map((item, idx) => (
+                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="border border-gray-300 px-2 py-1">{item.name}</td>
+                    <td className="border border-gray-300 px-2 py-1 text-center">{item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       <div className="grid grid-cols-2 gap-8 mt-8 pt-4 border-t text-sm">
         <div><p className="mb-8">Instructor Signature: _______________________</p><p>Date: _______________________</p></div>
         <div><p className="mb-8">Approved By: _______________________</p><p>Date: _______________________</p></div>

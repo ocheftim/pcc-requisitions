@@ -1147,7 +1147,9 @@ export default function ConsolidatedOrderingPage() {
         classDate: req.class_date,
         students: req.students || 0,
         recipes: req.recipes || '',
-        items: items
+        items: items,
+        equipment: req.equipment,
+        recipe_citations: req.recipe_citations
       });
     });
     return Object.values(byInstructor);
@@ -1248,9 +1250,20 @@ export default function ConsolidatedOrderingPage() {
           <div class="class-block">
             <div class="class-header">${getCourseName(req.course)} - ${req.classDate ? formatDate(req.classDate) : 'No date'}</div>
             <div class="class-meta">
-              <span><strong>Students:</strong> ${req.students}</span>
+              <span><strong>Students:</strong> ${req.students} (${Math.ceil(parseInt(req.students) / (parseInt(req.students) <= 8 ? 2 : 3))} teams)</span>
             </div>
-            <p class="recipes"><strong>Recipes:</strong> ${req.recipes || 'None specified'}</p>
+            <div class="recipes" style="background:#eff6ff;padding:8px 12px;border-radius:4px;margin-bottom:8px;">
+              <strong style="color:#1e40af;">Recipes:</strong><br/>
+              ${(() => {
+                let cites = [];
+                try { cites = typeof req.recipe_citations === 'string' ? JSON.parse(req.recipe_citations) : (req.recipe_citations || []); } catch(e) {}
+                if (cites.length) {
+                  return cites.map(c => '<span>' + c.recipe + '</span> <span style="color:#666;font-size:10px;">(' + c.source + ', ' + c.edition + ' Ed., p.' + c.page + ')</span>').join('<br/>');
+                }
+                return req.recipes || 'None specified';
+              })()}
+            </div>
+            <p style="background:#f0fdf4;padding:6px 10px;border-radius:4px;margin:8px 0;font-size:11px;border:1px solid #bbf7d0;"><strong style="color:#166534;">Production:</strong> Each team produces 1× of each recipe. Total: ${Math.ceil(parseInt(req.students) / (parseInt(req.students) <= 8 ? 2 : 3))}× batches per recipe.</p>
             
             <table>
               <thead>
@@ -1280,18 +1293,46 @@ export default function ConsolidatedOrderingPage() {
                 }).join('')}
               </tbody>
             </table>
+            ${(() => {
+              let equip = [];
+              try { equip = typeof req.equipment === 'string' ? JSON.parse(req.equipment) : (req.equipment || []); } catch(e) {}
+              const exclude = ['sheeter','proof box','proof box/cabinet','deck oven','convection oven','marble slab','marble slab or cold table'];
+              equip = equip.filter(e => !exclude.includes(e.name.toLowerCase()));
+              if (!equip.length) return '';
+              return '<h3 style="margin:15px 0 5px;font-size:13px;">Equipment</h3><table><thead><tr><th>Item</th><th style="width:50px;text-align:center">Qty</th></tr></thead><tbody>' + equip.map(e => '<tr><td>' + e.name + '</td><td style="text-align:center">' + e.quantity + '</td></tr>').join('') + '</tbody></table>';
+            })()}
+            
           </div>
         `).join('')}
         
-        <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print Again</button>
+        <div style="margin-top:15px;">
+          <button onclick="window.print()" style="padding:10px 20px;margin-right:10px;cursor:pointer;">Print</button>
+          <button onclick="copyForEmail()" id="copyBtn" style="padding:10px 20px;background:#059669;color:white;border:none;border-radius:4px;cursor:pointer;">Copy for Email</button>
+        </div>
+        <script>
+        function copyForEmail() {
+          var range = document.createRange();
+          var content = document.body.cloneNode(true);
+          content.querySelectorAll('button').forEach(function(b){b.remove();});
+          content.querySelectorAll('script').forEach(function(s){s.remove();});
+          var div = document.createElement('div');
+          div.innerHTML = content.innerHTML;
+          document.body.appendChild(div);
+          range.selectNodeContents(div);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+          document.execCommand('copy');
+          window.getSelection().removeAllRanges();
+          document.body.removeChild(div);
+          document.getElementById('copyBtn').textContent = 'Copied!';
+          setTimeout(function() { document.getElementById('copyBtn').textContent = 'Copy for Email'; }, 2000);
+        }
+        </script>
       </body>
       </html>
     `);
     printWindow.document.close();
-    setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
-    }, 100);
+    printWindow.focus();
   };
 
   // Email confirmation (opens email client)
