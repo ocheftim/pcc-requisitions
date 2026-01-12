@@ -179,7 +179,7 @@ export default function CateringEventDetail() {
     if (!packSize) return { qty: 1, unit: 'each' };
     const str = packSize.toLowerCase().trim();
     
-    // Pattern: "6/5 lb" = 6 units of 5 lb = 30 lb total
+    // Pattern: "6/5 lb" or "6/5lb" = 6 units of 5 lb = 30 lb total
     const slashMatch = str.match(/(\d+)\s*\/\s*(\d+\.?\d*)\s*(lb|oz|ct|each|gal|qt|pt)?/);
     if (slashMatch) {
       const count = parseFloat(slashMatch[1]);
@@ -188,13 +188,43 @@ export default function CateringEventDetail() {
       return { qty: count * size, unit };
     }
     
-    // Pattern: "25 lb" or "12 ct"
+    // Pattern: "25 lb" or "12 ct" or "25LB"
     const simpleMatch = str.match(/(\d+\.?\d*)\s*(lb|oz|ct|each|gal|qt|pt|bunch)?/);
     if (simpleMatch) {
       return { qty: parseFloat(simpleMatch[1]), unit: simpleMatch[2] || 'each' };
     }
     
     return { qty: 1, unit: 'each' };
+  };
+
+  // Convert recipe quantity to pack size units
+  const convertToPackUnits = (qty, recipeUnit, packUnit) => {
+    const ru = (recipeUnit || 'each').toLowerCase();
+    const pu = (packUnit || 'each').toLowerCase();
+    
+    // Same units - no conversion needed
+    if (ru === pu) return qty;
+    
+    // Weight conversions
+    if (ru === 'oz' && pu === 'lb') return qty / 16;
+    if (ru === 'lb' && pu === 'oz') return qty * 16;
+    
+    // Volume conversions
+    if (ru === 'qt' && pu === 'gal') return qty / 4;
+    if (ru === 'gal' && pu === 'qt') return qty * 4;
+    if (ru === 'pt' && pu === 'qt') return qty / 2;
+    if (ru === 'qt' && pu === 'pt') return qty * 2;
+    if (ru === 'oz' && pu === 'gal') return qty / 128;
+    if (ru === 'gal' && pu === 'oz') return qty * 128;
+    if (ru === 'cup' && pu === 'gal') return qty / 16;
+    if (ru === 'tbsp' && pu === 'oz') return qty / 2;
+    if (ru === 'tbsp' && pu === 'lb') return qty / 32;
+    
+    // Count-based - treat as 1:1 if can't convert
+    if (pu === 'ct' || pu === 'each') return qty;
+    
+    // Default: return original qty (best effort)
+    return qty;
   };
 
   // Calculate recipe costs
@@ -210,14 +240,18 @@ export default function CateringEventDetail() {
       recipeIngs.forEach(item => {
         const ingInfo = ingMap[item.name?.toLowerCase()] || {};
         const qty = parseFloat(item.quantity) || 0;
+        const recipeUnit = item.unit || 'each';
         
         if (qty === 0) return;
         
         // Get cost per unit from case_price / pack_size
         if (ingInfo.case_price && ingInfo.pack_size) {
           const pack = parsePackSize(ingInfo.pack_size);
-          const costPerUnit = ingInfo.case_price / pack.qty;
-          total += qty * costPerUnit;
+          const costPerPackUnit = ingInfo.case_price / pack.qty;
+          
+          // Convert recipe qty to pack units
+          const convertedQty = convertToPackUnits(qty, recipeUnit, pack.unit);
+          total += convertedQty * costPerPackUnit;
         } else if (ingInfo.unit_price) {
           // Fallback to unit_price (already cost per unit)
           total += qty * ingInfo.unit_price;
@@ -605,7 +639,13 @@ export default function CateringEventDetail() {
                           <td className="px-4 py-2 text-gray-600">{item.vendor}</td>
                           <td className="px-4 py-2 text-gray-600">{item.packSize || '-'}</td>
                           <td className="px-4 py-2 text-right text-gray-600">
-                            {item.casePrice > 0 ? `$${(item.casePrice * 0.25).toFixed(2)}` : '-'}
+                            {(() => {
+                              if (!item.casePrice || !item.packSize) return '-';
+                              const pack = parsePackSize(item.packSize);
+                              const costPerPackUnit = item.casePrice / pack.qty;
+                              const convertedQty = convertToPackUnits(item.quantity, item.unit, pack.unit);
+                              return `$${(convertedQty * costPerPackUnit).toFixed(2)}`;
+                            })()}
                           </td>
                         </tr>
                       ))}
