@@ -429,7 +429,7 @@ export default function CateringEventDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b">
-        {['overview', 'recipes', 'shopping', 'prep'].map(tab => (
+        {['overview', 'recipes', 'shopping', 'pull', 'prep'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -442,6 +442,7 @@ export default function CateringEventDetail() {
             {tab === 'overview' && '📋 Overview'}
             {tab === 'recipes' && `🍽️ Recipes (${recipes.length})`}
             {tab === 'shopping' && '🛒 Shopping List'}
+            {tab === 'pull' && '📦 Pull List'}
             {tab === 'prep' && '✅ Prep Tasks'}
           </button>
         ))}
@@ -655,6 +656,177 @@ export default function CateringEventDetail() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pull List Tab */}
+      {activeTab === 'pull' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Pull List - {event?.event_name}</h2>
+            <button
+              onClick={() => {
+                const printContent = document.getElementById('pull-list-print').innerHTML;
+                const win = window.open('', '_blank');
+                win.document.write(`
+                  <html>
+                    <head>
+                      <title>Pull List - ${event?.event_name}</title>
+                      <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { font-size: 18px; margin-bottom: 5px; }
+                        h2 { font-size: 14px; color: #666; margin-bottom: 20px; }
+                        h3 { font-size: 14px; background: #f0f0f0; padding: 8px; margin: 15px 0 5px 0; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+                        th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 12px; }
+                        th { background: #f5f5f5; font-weight: bold; }
+                        .checkbox { width: 20px; height: 20px; border: 2px solid #333; display: inline-block; }
+                        .qty { text-align: right; font-weight: bold; }
+                        @media print { body { padding: 0; } }
+                      </style>
+                    </head>
+                    <body>${printContent}</body>
+                  </html>
+                `);
+                win.document.close();
+                win.print();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              🖨️ Print Pull List
+            </button>
+          </div>
+
+          <div id="pull-list-print">
+            <div className="hidden print:block">
+              <h1>{event?.event_name}</h1>
+              <h2>{new Date(event?.event_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} • {event?.guest_count} guests</h2>
+            </div>
+
+            {/* Walk-in Cooler */}
+            <div className="mb-6">
+              <h3 className="font-bold text-lg bg-blue-100 text-blue-800 px-4 py-2 rounded-t">🧊 Walk-in Cooler</h3>
+              <table className="w-full border">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="w-10 px-3 py-2 border">✓</th>
+                    <th className="text-left px-3 py-2 border">Item</th>
+                    <th className="text-right px-3 py-2 border w-20">Qty</th>
+                    <th className="text-left px-3 py-2 border w-20">Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(shoppingList)
+                    .filter(([cat]) => ['Produce', 'Dairy'].includes(cat))
+                    .flatMap(([cat, items]) => Object.values(items))
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((item, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 border text-center">
+                          <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                        </td>
+                        <td className="px-3 py-2 border font-medium">{item.name}</td>
+                        <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                        <td className="px-3 py-2 border">{item.unit}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Meat Cooler */}
+            {shoppingList['Meat & Seafood'] && Object.keys(shoppingList['Meat & Seafood']).length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-bold text-lg bg-red-100 text-red-800 px-4 py-2 rounded-t">🥩 Meat Cooler</h3>
+                <table className="w-full border">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="w-10 px-3 py-2 border">✓</th>
+                      <th className="text-left px-3 py-2 border">Item</th>
+                      <th className="text-right px-3 py-2 border w-20">Qty</th>
+                      <th className="text-left px-3 py-2 border w-20">Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.values(shoppingList['Meat & Seafood'])
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((item, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 border text-center">
+                            <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                          </td>
+                          <td className="px-3 py-2 border font-medium">{item.name}</td>
+                          <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                          <td className="px-3 py-2 border">{item.unit}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Freezer */}
+            {shoppingList['Frozen'] && Object.keys(shoppingList['Frozen']).length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-bold text-lg bg-purple-100 text-purple-800 px-4 py-2 rounded-t">❄️ Freezer</h3>
+                <table className="w-full border">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="w-10 px-3 py-2 border">✓</th>
+                      <th className="text-left px-3 py-2 border">Item</th>
+                      <th className="text-right px-3 py-2 border w-20">Qty</th>
+                      <th className="text-left px-3 py-2 border w-20">Unit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.values(shoppingList['Frozen'])
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((item, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 border text-center">
+                            <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                          </td>
+                          <td className="px-3 py-2 border font-medium">{item.name}</td>
+                          <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                          <td className="px-3 py-2 border">{item.unit}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Dry Storage */}
+            <div className="mb-6">
+              <h3 className="font-bold text-lg bg-amber-100 text-amber-800 px-4 py-2 rounded-t">📦 Dry Storage</h3>
+              <table className="w-full border">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="w-10 px-3 py-2 border">✓</th>
+                    <th className="text-left px-3 py-2 border">Item</th>
+                    <th className="text-right px-3 py-2 border w-20">Qty</th>
+                    <th className="text-left px-3 py-2 border w-20">Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(shoppingList)
+                    .filter(([cat]) => ['Pantry', 'Bakery', 'Beverages'].includes(cat))
+                    .flatMap(([cat, items]) => Object.values(items))
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((item, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 border text-center">
+                          <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                        </td>
+                        <td className="px-3 py-2 border font-medium">{item.name}</td>
+                        <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                        <td className="px-3 py-2 border">{item.unit}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
