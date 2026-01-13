@@ -116,9 +116,18 @@ export default function CateringEventDetail() {
         setPrepTasks(defaultPrepTasks);
       }
 
-      // Load completed tasks from localStorage
-      const saved = localStorage.getItem(`catering-tasks-${eventId}`);
-      if (saved) setCompletedTasks(JSON.parse(saved));
+      // Load completed tasks from prep_tasks in database
+      if (eventData.prep_tasks) {
+        const completed = {};
+        Object.entries(eventData.prep_tasks).forEach(([day, tasks]) => {
+          tasks.forEach((task, idx) => {
+            if (task.done) {
+              completed[`${day}-${idx}`] = true;
+            }
+          });
+        });
+        setCompletedTasks(completed);
+      }
 
     } catch (error) {
       console.error('Error loading event:', error);
@@ -271,12 +280,28 @@ export default function CateringEventDetail() {
     return Object.values(recipeCosts).reduce((sum, cost) => sum + cost, 0);
   }, [recipeCosts]);
 
-  // Toggle task completion
-  const toggleTask = (day, index) => {
+  // Toggle task completion - save to database
+  const toggleTask = async (day, index) => {
     const key = `${day}-${index}`;
-    const updated = { ...completedTasks, [key]: !completedTasks[key] };
+    const newValue = !completedTasks[key];
+    const updated = { ...completedTasks, [key]: newValue };
     setCompletedTasks(updated);
-    localStorage.setItem(`catering-tasks-${eventId}`, JSON.stringify(updated));
+    
+    // Update prep_tasks in database
+    const updatedPrepTasks = { ...prepTasks };
+    if (updatedPrepTasks[day] && updatedPrepTasks[day][index]) {
+      updatedPrepTasks[day][index] = { 
+        ...updatedPrepTasks[day][index], 
+        done: newValue 
+      };
+    }
+    
+    await supabase
+      .from('catering_events')
+      .update({ prep_tasks: updatedPrepTasks })
+      .eq('id', eventId);
+    
+    setPrepTasks(updatedPrepTasks);
   };
 
   // Format date
