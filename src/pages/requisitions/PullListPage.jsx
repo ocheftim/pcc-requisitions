@@ -37,21 +37,57 @@ export default function PullListPage() {
   const loadArchivedLists = () => { const archived = localStorage.getItem('toqueworks_pulllist_archive'); if (archived) setArchivedLists(JSON.parse(archived)); };
 
   const generatePullList = () => {
-    const ingMap = {}; ingredients.forEach(ing => { ingMap[ing.name?.toLowerCase()] = ing; });
-    const invMap = {}; inventory.forEach(inv => { invMap[inv.ingredient_id] = inv; });
-    const list = [];
+    const ingMap = {}; 
+    ingredients.forEach(ing => { 
+      ingMap[ing.name?.toLowerCase()] = ing; 
+    });
+    const invMap = {}; 
+    inventory.forEach(inv => { 
+      invMap[inv.ingredient_id] = inv; 
+    });
+    
+    // Consolidate items by name + unit
+    const consolidated = {};
     const filteredReqs = selectedDate ? requisitions.filter(r => r.class_date === selectedDate) : requisitions;
+    
     filteredReqs.forEach(req => {
       if (!req.items) return;
       const items = typeof req.items === 'string' ? JSON.parse(req.items) : req.items;
       items.forEach(item => {
         const ing = ingMap[item.name?.toLowerCase()] || {};
         const inv = invMap[ing.id] || {};
-        list.push({ id: req.id + '-' + item.name, name: item.name, quantity: parseFloat(item.quantity) || 0, unit: item.unit || ing.unit || 'ea', location: ing.storageLocation || inv.location || 'Unassigned', class: req.class_name, instructor: req.instructor, classDate: req.class_date, requisitionId: req.id, onHand: inv.quantity || 0, itemNumber: ing.itemNumber || '' });
+        const key = (item.name || '').toLowerCase() + '|' + (item.unit || ing.unit || 'ea');
+        const location = ing.storage_location || ing.storageLocation || inv.location || 'Unassigned';
+        const className = req.course || req.class_name || '';
+        
+        if (!consolidated[key]) {
+          consolidated[key] = {
+            id: key,
+            name: item.name,
+            quantity: 0,
+            unit: item.unit || ing.unit || 'ea',
+            location: location,
+            classes: [],
+            onHand: inv.quantity || 0,
+            itemNumber: ing.itemNumber || ing.item_number || ''
+          };
+        }
+        consolidated[key].quantity += parseFloat(item.quantity) || 0;
+        if (className && !consolidated[key].classes.includes(className)) {
+          consolidated[key].classes.push(className);
+        }
       });
     });
+    
+    const list = Object.values(consolidated).map(item => ({
+      ...item,
+      class: item.classes.join(', '),
+      quantity: Math.round(item.quantity * 1000) / 1000
+    }));
+    
     list.sort((a, b) => a.location !== b.location ? a.location.localeCompare(b.location) : a.name.localeCompare(b.name));
-    setPullList(list); setCheckedItems(new Set());
+    setPullList(list); 
+    setCheckedItems(new Set());
   };
 
   const saveToArchive = () => {
