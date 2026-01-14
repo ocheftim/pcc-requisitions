@@ -551,8 +551,6 @@ export default function CateringEventDetail() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
 
           {/* Event Notes */}
           {event?.notes && (
@@ -561,6 +559,8 @@ export default function CateringEventDetail() {
               <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{event.notes}</pre>
             </div>
           )}
+          </div>
+        </div>
 
       )}
 
