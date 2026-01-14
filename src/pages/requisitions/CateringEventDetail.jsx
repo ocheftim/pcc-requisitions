@@ -553,6 +553,15 @@ export default function CateringEventDetail() {
             )}
           </div>
         </div>
+
+          {/* Event Notes */}
+          {event?.notes && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow p-6 mt-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">📝 Event Notes</h2>
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{event.notes}</pre>
+            </div>
+          )}
+
       )}
 
       {/* Recipes Tab */}
