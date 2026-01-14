@@ -221,8 +221,8 @@ export default function CateringEventsPage() {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
-  const upcomingEvents = events.filter(e => new Date(e.event_date) >= new Date() && e.status !== 'cancelled');
-  const pastEvents = events.filter(e => new Date(e.event_date) < new Date() || e.status === 'cancelled');
+  const today = new Date(); today.setHours(0,0,0,0); const upcomingEvents = events.filter(e => new Date(e.event_date) >= today && e.status !== 'cancelled');
+  const pastEvents = events.filter(e => new Date(e.event_date) < today || e.status === 'cancelled');
 
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
