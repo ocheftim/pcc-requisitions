@@ -26,7 +26,7 @@ export default function PullListPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: reqs } = await supabase.from('requisitions').select('*').eq('status', 'approved').order('class_date', { ascending: true });
+      const { data: reqs } = await supabase.from('requisitions').select('*').order('class_date', { ascending: true });
       const { data: ings } = await supabase.from('ingredients').select('*');
       const { data: inv } = await supabase.from('inventory').select('*');
       setRequisitions(reqs || []); setIngredients(ings || []); setInventory(inv || []);
