@@ -134,14 +134,18 @@ export default function PullListPage() {
     const selectedDateFormatted = selectedDate ? new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "All Dates";
     let equipmentHtml = "";
     if (equipmentList.length > 0) {
-      equipmentHtml = "<h2 style='background:#fed7aa;color:#9a3412;padding:8px;border-radius:4px;margin-top:30px'>🔧 Equipment Needed</h2><div style='display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px'>" + equipmentList.map(eq => "<div style='padding:8px;background:#f3f4f6;border-radius:4px'>" + eq + "</div>").join("") + "</div>";
+      equipmentHtml = "<h2 style='background:#fed7aa;color:#9a3412;padding:8px;border-radius:4px;margin-top:30px'>Equipment Needed</h2><ul style='list-style:none;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:8px'>" + equipmentList.map(eq => "<li style='padding:8px;background:#f3f4f6;border-radius:4px'>" + eq + "</li>").join("") + "</ul>";
     }
-    const content = "<html><head><title>Pull List - " + selectedDateFormatted + "</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e40af}h2{color:#374151;margin-top:30px;background:#f3f4f6;padding:8px;border-radius:4px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9fafb;font-size:12px}.checkbox{width:20px;height:20px;border:2px solid #999;display:inline-block}</style></head><body><h1>Pull List</h1><div style='margin-bottom:20px'><strong>Class Date:</strong> " + selectedDateFormatted + "<br/><strong>Printed:</strong> " + date + "</div>" + Object.entries(groups).map(([group, items]) => "<h2>" + group + " (" + items.length + " items)</h2><table><thead><tr><th style='width:30px'>✓</th><th>Item</th><th>Qty</th><th>Unit</th><th>Class</th><th>On Hand</th></tr></thead><tbody>" + items.map(item => "<tr><td><span class='checkbox'></span></td><td>" + item.name + "</td><td>" + item.quantity + "</td><td>" + item.unit + "</td><td>" + (item.class || '') + "</td><td>" + item.onHand + "</td></tr>").join("") + "</tbody></table>").join("") + equipmentHtml + "</body></html>";
-    const printWindow = window.open("", "PrintWindow", "width=800,height=600");
-    printWindow.document.open();
-    printWindow.document.write(content);
-    printWindow.document.close();
-    printWindow.onload = function() { printWindow.print(); };
+    const content = "<!DOCTYPE html><html><head><title>Pull List</title></head><body style='font-family:Arial,sans-serif;padding:20px'><h1 style='color:#1e40af'>Pull List</h1><p><strong>Class Date:</strong> " + selectedDateFormatted + "</p><p><strong>Printed:</strong> " + date + "</p>" + Object.entries(groups).map(([group, items]) => "<h2 style='background:#f3f4f6;padding:8px;border-radius:4px'>" + group + " (" + items.length + " items)</h2><table style='width:100%;border-collapse:collapse'><thead><tr style='background:#f9fafb'><th style='border:1px solid #ddd;padding:8px;width:30px'>✓</th><th style='border:1px solid #ddd;padding:8px;text-align:left'>Item</th><th style='border:1px solid #ddd;padding:8px'>Qty</th><th style='border:1px solid #ddd;padding:8px'>Unit</th><th style='border:1px solid #ddd;padding:8px'>Class</th><th style='border:1px solid #ddd;padding:8px'>On Hand</th></tr></thead><tbody>" + items.map(item => "<tr><td style='border:1px solid #ddd;padding:8px'><span style='display:inline-block;width:16px;height:16px;border:2px solid #999'></span></td><td style='border:1px solid #ddd;padding:8px'>" + item.name + "</td><td style='border:1px solid #ddd;padding:8px;text-align:center'>" + item.quantity + "</td><td style='border:1px solid #ddd;padding:8px'>" + item.unit + "</td><td style='border:1px solid #ddd;padding:8px'>" + (item.class || "") + "</td><td style='border:1px solid #ddd;padding:8px;text-align:center'>" + item.onHand + "</td></tr>").join("") + "</tbody></table>").join("") + equipmentHtml + "</body></html>";
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "absolute";
+    iframe.style.top = "-10000px";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.write(content);
+    iframe.contentDocument.close();
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
   };
   const availableDates = [...new Set(requisitions.map(r => r.class_date))].filter(Boolean).sort();
 
