@@ -31,6 +31,10 @@ export default function PullListPage() {
       const { data: ings } = await supabase.from('ingredients').select('*');
       const { data: inv } = await supabase.from('inventory').select('*');
       setRequisitions(reqs || []); setIngredients(ings || []); setInventory(inv || []);
+      const today = new Date().toISOString().split('T')[0];
+      const dates = (reqs || []).map(r => r.class_date).filter(Boolean).sort();
+      const nextDate = dates.find(d => d >= today) || dates[0];
+      if (nextDate) setSelectedDate(nextDate);
     } catch (error) { console.error('Error:', error); }
     setLoading(false);
   };
