@@ -139,6 +139,8 @@ export default function PullListPage() {
     }
     printWindow.document.write("<html><head><title>Pull List</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e40af}h2{color:#374151;margin-top:30px;background:#f3f4f6;padding:8px;border-radius:4px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9fafb;font-size:12px}.checkbox{width:20px;height:20px;border:2px solid #999;display:inline-block;margin-right:8px}@media print{button{display:none}}</style></head><body><h1>Pull List</h1><div>Class Date: " + selectedDateFormatted + "</div><div>Printed: " + date + "</div>" + Object.entries(groups).map(function(entry) { return "<h2>" + entry[0] + " (" + entry[1].length + " items)</h2><table><thead><tr><th style=\"width:30px\">✓</th><th>Item</th><th>Qty</th><th>Unit</th><th>Class</th><th>On Hand</th></tr></thead><tbody>" + entry[1].map(function(item) { return "<tr><td><span class=\"checkbox\"></span></td><td>" + item.name + "</td><td>" + item.quantity + "</td><td>" + item.unit + "</td><td>" + item.class + "</td><td>" + item.onHand + "</td></tr>"; }).join("") + "</tbody></table>"; }).join("") + equipmentHtml + "<button onclick=\"window.print()\" style=\"margin-top:20px;padding:10px 20px\">Print</button></body></html>");
     printWindow.document.close();
+    printWindow.focus();
+    setTimeout(function() { printWindow.print(); }, 250);
   };
 
   const availableDates = [...new Set(requisitions.map(r => r.class_date))].filter(Boolean).sort();
