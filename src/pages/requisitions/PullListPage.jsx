@@ -130,19 +130,19 @@ export default function PullListPage() {
 
   const printPullList = () => {
     const groups = groupedList();
-    const printWindow = window.open("", "_blank");
     const date = new Date().toLocaleDateString();
     const selectedDateFormatted = selectedDate ? new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "All Dates";
     let equipmentHtml = "";
     if (equipmentList.length > 0) {
-      equipmentHtml = "<h2 style=\"background:#fed7aa;color:#9a3412\">🔧 Equipment Needed</h2><div style=\"display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px\">" + equipmentList.map(function(eq) { return "<div style=\"padding:8px;background:#f3f4f6;border-radius:4px\">" + eq + "</div>"; }).join("") + "</div>";
+      equipmentHtml = "<h2 style='background:#fed7aa;color:#9a3412;padding:8px;border-radius:4px;margin-top:30px'>🔧 Equipment Needed</h2><div style='display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px'>" + equipmentList.map(eq => "<div style='padding:8px;background:#f3f4f6;border-radius:4px'>" + eq + "</div>").join("") + "</div>";
     }
-    printWindow.document.write("<html><head><title>Pull List</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e40af}h2{color:#374151;margin-top:30px;background:#f3f4f6;padding:8px;border-radius:4px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9fafb;font-size:12px}.checkbox{width:20px;height:20px;border:2px solid #999;display:inline-block;margin-right:8px}@media print{button{display:none}}</style></head><body><h1>Pull List</h1><div>Class Date: " + selectedDateFormatted + "</div><div>Printed: " + date + "</div>" + Object.entries(groups).map(function(entry) { return "<h2>" + entry[0] + " (" + entry[1].length + " items)</h2><table><thead><tr><th style=\"width:30px\">✓</th><th>Item</th><th>Qty</th><th>Unit</th><th>Class</th><th>On Hand</th></tr></thead><tbody>" + entry[1].map(function(item) { return "<tr><td><span class=\"checkbox\"></span></td><td>" + item.name + "</td><td>" + item.quantity + "</td><td>" + item.unit + "</td><td>" + item.class + "</td><td>" + item.onHand + "</td></tr>"; }).join("") + "</tbody></table>"; }).join("") + equipmentHtml + "<button onclick=\"window.print()\" style=\"margin-top:20px;padding:10px 20px\">Print</button></body></html>");
+    const content = "<html><head><title>Pull List - " + selectedDateFormatted + "</title><style>body{font-family:Arial,sans-serif;padding:20px}h1{color:#1e40af}h2{color:#374151;margin-top:30px;background:#f3f4f6;padding:8px;border-radius:4px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9fafb;font-size:12px}.checkbox{width:20px;height:20px;border:2px solid #999;display:inline-block}</style></head><body><h1>Pull List</h1><div style='margin-bottom:20px'><strong>Class Date:</strong> " + selectedDateFormatted + "<br/><strong>Printed:</strong> " + date + "</div>" + Object.entries(groups).map(([group, items]) => "<h2>" + group + " (" + items.length + " items)</h2><table><thead><tr><th style='width:30px'>✓</th><th>Item</th><th>Qty</th><th>Unit</th><th>Class</th><th>On Hand</th></tr></thead><tbody>" + items.map(item => "<tr><td><span class='checkbox'></span></td><td>" + item.name + "</td><td>" + item.quantity + "</td><td>" + item.unit + "</td><td>" + (item.class || '') + "</td><td>" + item.onHand + "</td></tr>").join("") + "</tbody></table>").join("") + equipmentHtml + "</body></html>";
+    const printWindow = window.open("", "PrintWindow", "width=800,height=600");
+    printWindow.document.open();
+    printWindow.document.write(content);
     printWindow.document.close();
-    printWindow.focus();
-    setTimeout(function() { printWindow.print(); }, 250);
+    printWindow.onload = function() { printWindow.print(); };
   };
-
   const availableDates = [...new Set(requisitions.map(r => r.class_date))].filter(Boolean).sort();
 
   if (loading) return <div className="p-6 flex items-center justify-center"><div className="text-gray-500">Loading...</div></div>;
