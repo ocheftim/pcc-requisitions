@@ -19,6 +19,7 @@ export default function PullListPage() {
   const [archivedLists, setArchivedLists] = useState([]);
   const [selectedArchive, setSelectedArchive] = useState(null);
   const [checkedItems, setCheckedItems] = useState(new Set());
+  const [equipmentList, setEquipmentList] = useState([]);
 
   useEffect(() => { loadData(); loadArchivedLists(); }, []);
   useEffect(() => { if (requisitions.length > 0 && ingredients.length > 0) generatePullList(); }, [requisitions, ingredients, selectedDate]);
@@ -86,7 +87,19 @@ export default function PullListPage() {
     }));
     
     list.sort((a, b) => a.location !== b.location ? a.location.localeCompare(b.location) : a.name.localeCompare(b.name));
-    setPullList(list); 
+    setPullList(list);
+    
+    // Extract equipment
+    const equipment = [];
+    filteredReqs.forEach(req => {
+      if (req.equipment) {
+        const eqList = typeof req.equipment === 'string' ? JSON.parse(req.equipment) : req.equipment;
+        eqList.forEach(eq => {
+          if (!equipment.includes(eq)) equipment.push(eq);
+        });
+      }
+    });
+    setEquipmentList(equipment); 
     setCheckedItems(new Set());
   };
 
@@ -163,7 +176,7 @@ export default function PullListPage() {
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-2"><label className="text-sm font-medium text-gray-600">Date:</label>
                     <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="px-3 py-2 border rounded-lg">
-                      <option value="">All Dates</option>
+                      
                       {availableDates.map(date => <option key={date} value={date}>{new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</option>)}
                     </select>
                   </div>
@@ -200,7 +213,19 @@ export default function PullListPage() {
                     </table>
                   </div>
                 ))}
+                {/* Equipment Section */}
+                {equipmentList.length > 0 && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-orange-100 px-4 py-3"><h2 className="text-lg font-semibold text-orange-800">🔧 Equipment Needed</h2></div>
+                    <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {equipmentList.map((eq, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded"><span className="text-gray-700">{eq}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+
             )}
           </>
         )}
