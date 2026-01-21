@@ -154,34 +154,25 @@ export default function SmartOrderPage() {
     return Array.from(courses).sort();
   }, [requisitions]);
 
-  // No auto-select - let user choose courses
-
-  // Filter requisitions by courses and term
-  const filteredRequisitions = useMemo(() => {
-    if (selectedCourses.length === 0) return [];
-    return requisitions.filter(r => {
-      const courseNormalized = (r.course || '').replace(/\s+/g, '').toUpperCase();
-      if (!selectedCourses.includes(courseNormalized)) return false;
+  // Build modules grouped by course
+  const modulesByCourse = useMemo(() => {
+    const courseMap = {};
+    
+    requisitions.forEach(req => {
+      const course = (req.course || '').replace(/\s+/g, '').toUpperCase();
+      if (!selectedCourses.includes(course)) return;
       
       // Filter by term
-      const term = getTermForDate(r.class_date);
-      if (selectedTerm && term !== selectedTerm) return false;
+      const term = getTermForDate(req.class_date);
+      if (selectedTerm && term !== selectedTerm) return;
       
-      return true;
-    });
-  }, [requisitions, selectedCourses, selectedTerm]);
-
-  // Build module list
-  const modules = useMemo(() => {
-    const moduleList = [];
-    
-    filteredRequisitions.forEach(req => {
+      if (!courseMap[course]) courseMap[course] = [];
+      
       const moduleNum = extractModuleNumber(req.week);
       const topic = extractTopic(req.week);
       const dateStr = formatShortDate(req.class_date);
-      const course = (req.course || '').replace(/\s+/g, '').toUpperCase();
       
-      moduleList.push({
+      courseMap[course].push({
         id: req.id,
         moduleNum,
         topic,
@@ -192,14 +183,16 @@ export default function SmartOrderPage() {
       });
     });
     
-    // Sort by date
-    moduleList.sort((a, b) => {
-      if (a.date && b.date) return a.date - b.date;
-      return a.moduleNum - b.moduleNum;
+    // Sort each course's modules by date
+    Object.keys(courseMap).forEach(course => {
+      courseMap[course].sort((a, b) => {
+        if (a.date && b.date) return a.date - b.date;
+        return a.moduleNum - b.moduleNum;
+      });
     });
     
-    return moduleList;
-  }, [filteredRequisitions]);
+    return courseMap;
+  }, [requisitions, selectedCourses, selectedTerm]);
 
   // Consolidate ingredients
   useEffect(() => {
@@ -289,16 +282,36 @@ export default function SmartOrderPage() {
     return groups;
   }, [displayItems]);
 
+  // Toggle course selection
+  const toggleCourse = (course) => {
+    setSelectedCourses(prev => {
+      if (prev.includes(course)) {
+        // Remove course and its module selections
+        const courseMods = (modulesByCourse[course] || []).map(m => m.id);
+        setSelectedReqs(reqs => reqs.filter(id => !courseMods.includes(id)));
+        return prev.filter(c => c !== course);
+      } else {
+        return [...prev, course];
+      }
+    });
+  };
+
   // Toggle module
   const toggleModule = (reqId) => {
     setSelectedReqs(prev => prev.includes(reqId) ? prev.filter(x => x !== reqId) : [...prev, reqId]);
   };
 
-  // Select all modules
-  const selectAllModules = () => {
-    const allIds = modules.map(m => m.id);
-    const allSelected = allIds.every(id => selectedReqs.includes(id));
-    setSelectedReqs(allSelected ? [] : allIds);
+  // Select all modules for a course
+  const selectAllForCourse = (course) => {
+    const courseModules = modulesByCourse[course] || [];
+    const moduleIds = courseModules.map(m => m.id);
+    const allSelected = moduleIds.every(id => selectedReqs.includes(id));
+    
+    if (allSelected) {
+      setSelectedReqs(prev => prev.filter(id => !moduleIds.includes(id)));
+    } else {
+      setSelectedReqs(prev => [...new Set([...prev, ...moduleIds])]);
+    }
   };
 
   // Update functions
@@ -357,16 +370,18 @@ export default function SmartOrderPage() {
     const printWindow = window.open('', '_blank');
     const vendorNames = { sysco: 'Sysco', shamrock: 'Shamrock', peddlers: "Peddler's Son", costco: 'Costco', local: 'Local/Other' };
     
-    // Get selected module info for header
-    const selectedModules = modules.filter(m => selectedReqs.includes(m.id));
-    const moduleInfo = selectedModules.map(m => `${m.course} Mod ${m.moduleNum} (${m.dateStr})`).join(', ');
-    const courseList = selectedCourses.join(', ');
+    // Build module summary
+    const moduleSummary = selectedCourses.map(course => {
+      const mods = (modulesByCourse[course] || []).filter(m => selectedReqs.includes(m.id));
+      if (mods.length === 0) return null;
+      return `${course}: Mod ${mods.map(m => m.moduleNum).join(', ')}`;
+    }).filter(Boolean).join(' | ');
     
     let html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Order - ${courseList} - ${new Date().toLocaleDateString()}</title>
+        <title>Order - ${new Date().toLocaleDateString()}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; }
           h1 { font-size: 18px; margin-bottom: 5px; }
@@ -380,9 +395,9 @@ export default function SmartOrderPage() {
         </style>
       </head>
       <body>
-        <h1>${courseList} Order</h1>
+        <h1>Lab Order</h1>
         <div class="meta">
-          <div>${moduleInfo}</div>
+          <div>${moduleSummary}</div>
           <div>Generated: ${new Date().toLocaleString()}</div>
         </div>
     `;
@@ -433,7 +448,7 @@ export default function SmartOrderPage() {
                 {selectedReqs.length > 0 && <span> · from {selectedReqs.length} modules</span>}
               </>
             ) : (
-              'Select modules below to build order'
+              'Select courses and modules below'
             )}
           </p>
         </div>
@@ -449,8 +464,8 @@ export default function SmartOrderPage() {
         </button>
       </div>
 
-      {/* Compact Filter Bar */}
-      <div className="bg-white border rounded-lg p-3 mb-4">
+      {/* Course & Term Selection */}
+      <div className="bg-white border rounded-lg p-3 mb-3">
         <div className="flex flex-wrap items-center gap-4">
           {/* Course Toggle Buttons */}
           <div className="flex items-center gap-2">
@@ -458,17 +473,12 @@ export default function SmartOrderPage() {
             <div className="flex gap-1">
               {availableCourses.map(course => {
                 const isSelected = selectedCourses.includes(course);
+                const moduleCount = (modulesByCourse[course] || []).length;
+                const selectedCount = (modulesByCourse[course] || []).filter(m => selectedReqs.includes(m.id)).length;
                 return (
                   <button
                     key={course}
-                    onClick={() => {
-                      setSelectedCourses(prev => 
-                        prev.includes(course) 
-                          ? prev.filter(c => c !== course)
-                          : [...prev, course]
-                      );
-                      setSelectedReqs([]);
-                    }}
+                    onClick={() => toggleCourse(course)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                       isSelected
                         ? 'bg-blue-600 text-white'
@@ -476,6 +486,9 @@ export default function SmartOrderPage() {
                     }`}
                   >
                     {course}
+                    {isSelected && selectedCount > 0 && (
+                      <span className="ml-1 text-blue-200">({selectedCount})</span>
+                    )}
                   </button>
                 );
               })}
@@ -498,52 +511,59 @@ export default function SmartOrderPage() {
               ))}
             </select>
           </div>
-
-          {/* Divider */}
-          {selectedCourses.length > 0 && <div className="h-6 w-px bg-gray-300" />}
-
-          {/* Module Pills */}
-          {selectedCourses.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap flex-1">
-              <span className="text-sm font-medium text-gray-600">Modules:</span>
-              {modules.map(mod => {
-                const isSelected = selectedReqs.includes(mod.id);
-                // Show course prefix if multiple courses selected
-                const coursePrefix = selectedCourses.length > 1 ? `${mod.course.replace('CUL', '')} ` : '';
-                const label = mod.topic 
-                  ? `${coursePrefix}${mod.moduleNum} ${mod.topic} ${mod.dateStr}`
-                  : `${coursePrefix}${mod.moduleNum} ${mod.dateStr}`;
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => toggleModule(mod.id)}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
-                      isSelected
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                    title={`${mod.course} - ${mod.itemCount} items`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-              {modules.length > 0 && (
-                <button
-                  onClick={selectAllModules}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-all ${
-                    modules.every(m => selectedReqs.includes(m.id))
-                      ? 'bg-gray-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  All
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Module Selection - One Row Per Course */}
+      {selectedCourses.length > 0 && (
+        <div className="bg-white border rounded-lg p-3 mb-4 space-y-2">
+          {selectedCourses.map(course => {
+            const modules = modulesByCourse[course] || [];
+            const allSelected = modules.length > 0 && modules.every(m => selectedReqs.includes(m.id));
+            
+            return (
+              <div key={course} className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-gray-700 w-16">{course}:</span>
+                {modules.map(mod => {
+                  const isSelected = selectedReqs.includes(mod.id);
+                  const label = mod.topic 
+                    ? `${mod.moduleNum} ${mod.topic} ${mod.dateStr}`
+                    : `${mod.moduleNum} ${mod.dateStr}`;
+                  return (
+                    <button
+                      key={mod.id}
+                      onClick={() => toggleModule(mod.id)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title={`${mod.itemCount} items`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                {modules.length > 0 && (
+                  <button
+                    onClick={() => selectAllForCourse(course)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                      allSelected
+                        ? 'bg-gray-600 text-white'
+                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}
+                  >
+                    All
+                  </button>
+                )}
+                {modules.length === 0 && (
+                  <span className="text-xs text-gray-400 italic">No modules in {selectedTerm === 'term1' ? 'Term 1' : 'Term 2'}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Order Table Section */}
       {selectedReqs.length > 0 && (
@@ -688,14 +708,14 @@ export default function SmartOrderPage() {
         </>
       )}
 
-      {/* Empty state */}
+      {/* Empty states */}
       {selectedCourses.length === 0 && (
         <div className="bg-white border rounded-lg p-12 text-center text-gray-500">
           <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
           <p className="text-lg font-medium text-gray-700 mb-1">Select courses to get started</p>
-          <p className="text-sm">Click the course buttons above, then select modules</p>
+          <p className="text-sm">Click the course buttons above</p>
         </div>
       )}
 
@@ -705,7 +725,7 @@ export default function SmartOrderPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
           <p className="text-lg font-medium text-gray-700 mb-1">Select modules to build your order</p>
-          <p className="text-sm">Click the module pills above to add items</p>
+          <p className="text-sm">Click the module pills for each course above</p>
         </div>
       )}
     </div>
