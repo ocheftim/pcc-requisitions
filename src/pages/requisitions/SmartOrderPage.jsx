@@ -127,7 +127,7 @@ export default function SmartOrderPage() {
         });
         
         const active = processed.filter(r => 
-          r.status !== 'completed' && r.status !== 'cancelled' && r.ingredients && r.ingredients.length > 0
+          r.status !== 'completed' && r.status !== 'cancelled'
         );
         
         setRequisitions(active);
@@ -526,6 +526,7 @@ export default function SmartOrderPage() {
                 <span className="text-sm font-semibold text-gray-700 w-16">{course}:</span>
                 {modules.map(mod => {
                   const isSelected = selectedReqs.includes(mod.id);
+                  const isEmpty = mod.itemCount === 0;
                   const label = mod.topic 
                     ? `${mod.moduleNum} ${mod.topic} ${mod.dateStr}`
                     : `${mod.moduleNum} ${mod.dateStr}`;
@@ -534,13 +535,18 @@ export default function SmartOrderPage() {
                       key={mod.id}
                       onClick={() => toggleModule(mod.id)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
-                        isSelected
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        isEmpty
+                          ? isSelected
+                            ? 'bg-red-500 text-white'
+                            : 'bg-red-50 text-red-400 border border-red-200 hover:bg-red-100'
+                          : isSelected
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
-                      title={`${mod.itemCount} items`}
+                      title={isEmpty ? 'No items - needs requisition' : `${mod.itemCount} items`}
                     >
                       {label}
+                      {isEmpty && <span className="ml-1 text-xs">⚠</span>}
                     </button>
                   );
                 })}
