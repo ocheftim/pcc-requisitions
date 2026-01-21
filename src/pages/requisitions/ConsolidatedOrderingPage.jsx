@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 
 const ArchiveIcon = () => (
@@ -31,6 +31,12 @@ const CartIcon = () => (
   </svg>
 );
 
+const ChevronDownIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
+
 // ===========================================
 // COURSE NAME LOOKUP
 // ===========================================
@@ -60,7 +66,6 @@ const getCourseName = (code) => {
 // ===========================================
 const formatDate = (dateStr) => {
   if (!dateStr) return 'No date';
-  // Add time to prevent timezone shift: '2026-01-16' → '2026-01-16T12:00:00'
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('en-US');
 };
@@ -69,14 +74,11 @@ const formatDate = (dateStr) => {
 // EP → AP CONVERSION UTILITIES
 // ===========================================
 
-// Parse pack_size string to extract case info
-// Formats: "6/30OZ", "15LB", "24ea", "6/#10", "750ML", "2/5LB"
 const parsePackSize = (packSize) => {
   if (!packSize) return null;
   
   const normalized = packSize.toUpperCase().trim();
   
-  // Format: "6/30OZ" or "6/30 OZ" (count/size unit)
   let match = normalized.match(/^(\d+)\/(\d+\.?\d*)\s*(OZ|LB|GAL|QT|PT|ML|L|CT|EA)?$/);
   if (match) {
     return {
@@ -88,10 +90,8 @@ const parsePackSize = (packSize) => {
     };
   }
   
-  // Format: "6/#10" (#10 cans)
   match = normalized.match(/^(\d+)\/#(\d+)$/);
   if (match) {
-    // #10 can ≈ 96 oz, #5 can ≈ 56 oz
     const canSizes = { '10': 96, '5': 56, '2': 20, '1': 10 };
     const canOz = canSizes[match[2]] || 96;
     return {
@@ -103,7 +103,6 @@ const parsePackSize = (packSize) => {
     };
   }
   
-  // Format: "15LB" or "750ML" (single unit case)
   match = normalized.match(/^(\d+\.?\d*)\s*(OZ|LB|GAL|QT|PT|ML|L|CT|EA|PK)$/);
   if (match) {
     return {
@@ -115,7 +114,6 @@ const parsePackSize = (packSize) => {
     };
   }
   
-  // Format: "24ea" or "200ea" (count only)
   match = normalized.match(/^(\d+)\s*(EA|CT|PK)$/);
   if (match) {
     return {
@@ -130,17 +128,14 @@ const parsePackSize = (packSize) => {
   return null;
 };
 
-// Convert units to a common base (oz for weight/volume, ea for count)
 const convertToBase = (qty, unit) => {
   const u = (unit || '').toLowerCase().trim();
   
-  // Weight conversions (to oz)
   if (u === 'lb' || u === 'lbs') return { value: qty * 16, baseUnit: 'oz' };
   if (u === 'oz') return { value: qty, baseUnit: 'oz' };
   if (u === 'g') return { value: qty * 0.035274, baseUnit: 'oz' };
   if (u === 'kg') return { value: qty * 35.274, baseUnit: 'oz' };
   
-  // Volume conversions (to fl oz)
   if (u === 'gal' || u === 'gallon') return { value: qty * 128, baseUnit: 'floz' };
   if (u === 'qt' || u === 'quart') return { value: qty * 32, baseUnit: 'floz' };
   if (u === 'pt' || u === 'pint') return { value: qty * 16, baseUnit: 'floz' };
@@ -151,36 +146,29 @@ const convertToBase = (qty, unit) => {
   if (u === 'ml') return { value: qty * 0.033814, baseUnit: 'floz' };
   if (u === 'l' || u === 'liter') return { value: qty * 33.814, baseUnit: 'floz' };
   
-  // Count (already in base)
   if (u === 'ea' || u === 'each' || u === 'ct' || u === 'pk' || u === 'dz' || u === 'dozen') {
     const multiplier = (u === 'dz' || u === 'dozen') ? 12 : 1;
     return { value: qty * multiplier, baseUnit: 'ea' };
   }
   
-  // Default: treat as count
   return { value: qty, baseUnit: 'ea' };
 };
 
-// Get AP case quantity needed for EP requirement
 const calculateAPOrder = (epQty, epUnit, packSize) => {
   const parsed = parsePackSize(packSize);
   if (!parsed) {
-    return { 
-      casesNeeded: null, 
+    return {
+      casesNeeded: null,
       apUnit: 'case',
       caseSize: packSize || 'N/A',
       epConverted: epQty
     };
   }
   
-  // Convert EP quantity to base unit
   const epBase = convertToBase(epQty, epUnit);
-  
-  // Convert case total to base unit
   const caseBase = convertToBase(parsed.totalVolume, parsed.unitType);
   
-  // If units are compatible (both weight or both volume or both count)
-  if (epBase.baseUnit === caseBase.baseUnit || 
+  if (epBase.baseUnit === caseBase.baseUnit ||
       (epBase.baseUnit === 'oz' && caseBase.baseUnit === 'oz') ||
       (epBase.baseUnit === 'floz' && caseBase.baseUnit === 'floz') ||
       (epBase.baseUnit === 'ea' && caseBase.baseUnit === 'ea')) {
@@ -195,7 +183,6 @@ const calculateAPOrder = (epQty, epUnit, packSize) => {
     };
   }
   
-  // Units not compatible - just return EP qty and flag it
   return {
     casesNeeded: null,
     apUnit: epUnit,
@@ -205,49 +192,38 @@ const calculateAPOrder = (epQty, epUnit, packSize) => {
   };
 };
 
-// ===========================================
-// END EP → AP CONVERSION UTILITIES
-// ===========================================
-
-// Categories that are perishable (short shelf life)
 const PERISHABLE_CATEGORIES = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery & Bread'];
 const NON_PERISHABLE_CATEGORIES = ['Pantry', 'Beverages', 'Wine & Spirits', 'Production Items', 'Frozen Foods'];
 
-// Items that should be flagged for grocery store purchase
 const isGroceryStoreItem = (item, ingredient) => {
-  // Only flag Produce items (especially fresh herbs)
   if (ingredient?.category !== 'Produce') return false;
   
-  // Parse pack size to get case quantity
   const packSize = ingredient?.pack_size || '';
   const match = packSize.match(/^(\d+)\/(\d+\.?\d*)\s*(LB|OZ|CT|EA|GAL)?$/i) || packSize.match(/^(\d+\.?\d*)\s*(LB|OZ|CT|EA|GAL)?$/i);
   
-  if (!match) return true; // No pack size info, flag it
+  if (!match) return true;
   
   let caseQty;
   if (match[3] || (match[2] && isNaN(match[2]))) {
-    // Format: 1/16OZ or 30CT
     const count = parseFloat(match[1]) || 1;
     const size = parseFloat(match[2]) || 1;
     const unit = (match[3] || match[2] || '').toUpperCase();
     
-    if (unit === 'OZ') caseQty = (count * size) / 16; // Convert to lbs
+    if (unit === 'OZ') caseQty = (count * size) / 16;
     else if (unit === 'LB') caseQty = count * size;
-    else caseQty = count * size; // CT, EA
+    else caseQty = count * size;
   } else {
     caseQty = parseFloat(match[1]) || 1;
   }
   
-  // Flag if quantity needed is less than 25% of case
   const qtyNeeded = item.quantity || 0;
   return qtyNeeded < (caseQty * 0.25);
 };
 
-// Get week range for a date
 const getWeekRange = (date) => {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(d.setDate(diff));
   monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
@@ -256,11 +232,85 @@ const getWeekRange = (date) => {
   return { start: monday, end: sunday };
 };
 
-// Format date for week display
-const formatWeekLabel = (date) => {
-  const { start, end } = getWeekRange(date);
-  const opts = { month: 'short', day: 'numeric' };
-  return `${start.toLocaleDateString('en-US', opts)} - ${end.toLocaleDateString('en-US', opts)}`;
+// ===========================================
+// MULTI-SELECT DROPDOWN COMPONENT
+// ===========================================
+const MultiSelectDropdown = ({ label, options, selected, onChange, countSuffix = '' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleOption = (option) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter(s => s !== option));
+    } else {
+      onChange([...selected, option]);
+    }
+  };
+
+  const selectAll = () => {
+    if (selected.length === options.length) {
+      onChange([]);
+    } else {
+      onChange([...options]);
+    }
+  };
+
+  const displayText = selected.length === 0 
+    ? `All ${label}` 
+    : selected.length === 1 
+      ? selected[0] 
+      : `${selected.length} ${label}${countSuffix}`;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm min-w-[140px] justify-between ${selected.length > 0 ? 'bg-blue-50 border-blue-300' : 'bg-white'}`}
+      >
+        <span className="truncate">{displayText}</span>
+        <ChevronDownIcon />
+      </button>
+      
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border rounded-lg shadow-lg z-30 max-h-80 overflow-hidden">
+          <div className="p-2 border-b bg-gray-50">
+            <button
+              onClick={selectAll}
+              className="w-full text-left px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded"
+            >
+              {selected.length === options.length ? '✓ Deselect All' : '☐ Select All'}
+            </button>
+          </div>
+          <div className="max-h-60 overflow-y-auto p-2">
+            {options.map(option => (
+              <label
+                key={option}
+                className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option)}
+                  onChange={() => toggleOption(option)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm flex-1">{option}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default function ConsolidatedOrderingPage() {
@@ -273,27 +323,25 @@ export default function ConsolidatedOrderingPage() {
   const [archivedOrders, setArchivedOrders] = useState([]);
   const [selectedArchive, setSelectedArchive] = useState(null);
   
-  // New filter states
-  const [filterWeek, setFilterWeek] = useState(null); // Will default to upcoming week after data loads
-  const [filterInstructor, setFilterInstructor] = useState('all');
-  const [filterCourse, setFilterCourse] = useState('all');
-  const [filterItemType, setFilterItemType] = useState('all'); // all, perishable, non-perishable
+  // Filter states - CHANGED to arrays for multi-select
+  const [filterWeek, setFilterWeek] = useState(null);
+  const [filterInstructors, setFilterInstructors] = useState([]); // Changed from single to array
+  const [filterCourses, setFilterCourses] = useState([]); // Changed from single to array
+  const [filterItemType, setFilterItemType] = useState('all');
   const [showGroceryOnly, setShowGroceryOnly] = useState(false);
-  const [inventory, setInventory] = useState({}); // Track on-hand inventory from Supabase
+  const [inventory, setInventory] = useState({});
   const [savingInventory, setSavingInventory] = useState(false);
-  const [orderOverrides, setOrderOverrides] = useState({}); // Manual order qty overrides
-  const [sortBy, setSortBy] = useState('vendor'); // 'vendor' or 'category'
-  const [vendorAlternatives, setVendorAlternatives] = useState({}); // Alternative vendors per ingredient
-  const [vendorOverrides, setVendorOverrides] = useState({}); // Selected vendor overrides
-  const [showConfirmations, setShowConfirmations] = useState(false); // Show instructor confirmations modal
+  const [orderOverrides, setOrderOverrides] = useState({});
+  const [sortBy, setSortBy] = useState('vendor');
+  const [vendorAlternatives, setVendorAlternatives] = useState({});
+  const [vendorOverrides, setVendorOverrides] = useState({});
+  const [showConfirmations, setShowConfirmations] = useState(false);
   
-  // Invoice upload modal state
   const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [invoiceMatches, setInvoiceMatches] = useState([]);
   const [processingInvoice, setProcessingInvoice] = useState(false);
 
-  // Load vendor alternatives from Supabase
   const loadVendorAlternatives = async () => {
     try {
       const { data, error } = await supabase
@@ -303,7 +351,6 @@ export default function ConsolidatedOrderingPage() {
       
       if (error) throw error;
       
-      // Group by ingredient name (lowercase for case-insensitive matching)
       const altMap = {};
       (data || []).forEach(v => {
         const key = v.ingredient_name?.toLowerCase();
@@ -319,13 +366,11 @@ export default function ConsolidatedOrderingPage() {
     }
   };
 
-  // Get selected vendor for an item (override or default)
   const getSelectedVendor = (itemName) => {
     const key = itemName?.toLowerCase();
     if (vendorOverrides[key]) {
       return vendorOverrides[key];
     }
-    // Return preferred vendor info if available
     const alts = vendorAlternatives[key];
     if (alts && alts.length > 0) {
       const preferred = alts.find(v => v.is_preferred) || alts[0];
@@ -334,7 +379,6 @@ export default function ConsolidatedOrderingPage() {
     return null;
   };
 
-  // Set vendor override for an item
   const setVendorOverride = (itemName, vendorData) => {
     const key = itemName?.toLowerCase();
     setVendorOverrides(prev => ({
@@ -343,7 +387,6 @@ export default function ConsolidatedOrderingPage() {
     }));
   };
 
-  // Load inventory from Supabase
   const loadInventory = async () => {
     try {
       const { data, error } = await supabase
@@ -366,17 +409,14 @@ export default function ConsolidatedOrderingPage() {
     }
   };
 
-  // Save on-hand value to Supabase
   const updateOnHand = async (vendor, itemName, value, unit) => {
     const qty = value === '' ? null : parseFloat(value) || 0;
     
-    // Update local state immediately for responsiveness
     setInventory(prev => ({
       ...prev,
       [itemName]: { quantity: qty, unit, lastCounted: new Date().toISOString() }
     }));
 
-    // Save to Supabase
     setSavingInventory(true);
     try {
       const { data: existing } = await supabase
@@ -386,21 +426,19 @@ export default function ConsolidatedOrderingPage() {
         .single();
 
       if (existing) {
-        // Update existing record
         await supabase
           .from('inventory_current')
-          .update({ 
-            quantity: qty, 
+          .update({
+            quantity: qty,
             unit,
             last_counted: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
           .eq('ingredient_name', itemName);
       } else {
-        // Insert new record
         await supabase
           .from('inventory_current')
-          .insert({ 
+          .insert({
             ingredient_name: itemName,
             quantity: qty,
             unit,
@@ -415,14 +453,12 @@ export default function ConsolidatedOrderingPage() {
     setSavingInventory(false);
   };
 
-  // Get on-hand value for an item
   const getOnHand = (vendor, itemName) => {
     const inv = inventory[itemName];
     if (!inv || inv.quantity === null) return '';
     return inv.quantity;
   };
 
-  // Get last counted date for an item
   const getLastCounted = (itemName) => {
     const inv = inventory[itemName];
     if (!inv || !inv.lastCounted) return null;
@@ -435,7 +471,6 @@ export default function ConsolidatedOrderingPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Get manual order override
   const getOrderOverride = (vendor, itemName) => {
     const key = `${vendor}:${itemName}`;
     const override = orderOverrides[key];
@@ -443,7 +478,6 @@ export default function ConsolidatedOrderingPage() {
     return override;
   };
 
-  // Set manual order override
   const setOrderOverride = (vendor, itemName, value) => {
     const key = `${vendor}:${itemName}`;
     setOrderOverrides(prev => ({
@@ -452,23 +486,18 @@ export default function ConsolidatedOrderingPage() {
     }));
   };
 
-  // Calculate effective order quantity
   const getEffectiveOrder = (vendor, itemName, calculatedOrder) => {
-    // Check for manual override first
     const override = getOrderOverride(vendor, itemName);
     if (override !== '') return override;
     
-    // Check if on-hand was entered
     const onHand = getOnHand(vendor, itemName);
     if (onHand !== '') {
       return Math.max(0, calculatedOrder - onHand);
     }
     
-    // Default: return calculated order
     return calculatedOrder;
   };
 
-  // Clear all inventory counts
   const clearAllOnHand = async () => {
     if (!window.confirm('Clear all on-hand counts? This will reset inventory to uncounted.')) return;
     
@@ -477,7 +506,7 @@ export default function ConsolidatedOrderingPage() {
       await supabase
         .from('inventory_current')
         .update({ quantity: null, last_counted: null })
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Update all rows
+        .neq('id', '00000000-0000-0000-0000-000000000000');
       
       setInventory({});
     } catch (error) {
@@ -486,14 +515,12 @@ export default function ConsolidatedOrderingPage() {
     setSavingInventory(false);
   };
 
-  // Parse Sysco invoice CSV
   const parseSyscoInvoice = (csvText) => {
     const lines = csvText.split('\n').filter(l => l.trim());
     let invoiceInfo = {};
     const items = [];
     
     for (const line of lines) {
-      // Parse CSV properly handling quoted fields
       const parts = [];
       let current = '';
       let inQuotes = false;
@@ -511,7 +538,6 @@ export default function ConsolidatedOrderingPage() {
       parts.push(current.trim());
       
       if (parts[0] === 'H') {
-        // Header line: H,O0601,049,699207,"Dec 12 2025 05:08 PM",01/06/2026,N,," ",04843987,04843987,1715.33,25,SUBMITTED
         invoiceInfo = {
           orderDate: parts[4],
           deliveryDate: parts[5],
@@ -521,7 +547,6 @@ export default function ConsolidatedOrderingPage() {
           status: parts[13]
         };
       } else if (parts[0] === 'P') {
-        // Product line: P,7644909,4,0,,"1/35 LB","SYS PRM","Fry On Shortening Frying Liquid",,N,61.75,
         items.push({
           supc: parts[1],
           caseQty: parseInt(parts[2]) || 0,
@@ -538,9 +563,7 @@ export default function ConsolidatedOrderingPage() {
     return { invoiceInfo, items };
   };
 
-  // Match invoice items to our ingredients
   const matchInvoiceItems = async (items) => {
-    // Get all vendor records to match by SUPC
     const { data: vendors } = await supabase
       .from('ingredient_vendors')
       .select('ingredient_name, item_number, vendor_description')
@@ -551,7 +574,6 @@ export default function ConsolidatedOrderingPage() {
       if (v.item_number) vendorMap[v.item_number] = v;
     });
     
-    // Get all ingredients for fuzzy matching
     const { data: allIngredients } = await supabase
       .from('ingredients')
       .select('name');
@@ -559,7 +581,6 @@ export default function ConsolidatedOrderingPage() {
     const ingredientNames = (allIngredients || []).map(i => i.name.toLowerCase());
     
     return items.map(item => {
-      // Try exact SUPC match first
       const vendorMatch = vendorMap[item.supc];
       if (vendorMatch) {
         return {
@@ -571,13 +592,11 @@ export default function ConsolidatedOrderingPage() {
         };
       }
       
-      // Try fuzzy match on description
       const desc = item.description.toLowerCase();
       let bestMatch = null;
       let bestScore = 0;
       
       for (const name of ingredientNames) {
-        // Simple word matching
         const descWords = desc.split(/\s+/);
         const nameWords = name.split(/[\s,]+/);
         let matches = 0;
@@ -611,7 +630,6 @@ export default function ConsolidatedOrderingPage() {
     });
   };
 
-  // Handle invoice file upload
   const handleInvoiceUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -630,7 +648,6 @@ export default function ConsolidatedOrderingPage() {
     setShowInvoiceUpload(true);
   };
 
-  // Process invoice - update inventory and create transactions
   const processInvoice = async () => {
     setProcessingInvoice(true);
     const now = new Date().toISOString();
@@ -639,9 +656,8 @@ export default function ConsolidatedOrderingPage() {
       for (const item of invoiceMatches) {
         if (!item.matched || !item.ingredientName) continue;
         
-        const qty = item.caseQty + (item.splitQty > 0 ? item.splitQty / 6 : 0); // Approximate split as fraction
+        const qty = item.caseQty + (item.splitQty > 0 ? item.splitQty / 6 : 0);
         
-        // Create transaction record
         await supabase.from('inventory_transactions').insert({
           ingredient_name: item.ingredientName,
           transaction_type: 'received',
@@ -655,7 +671,6 @@ export default function ConsolidatedOrderingPage() {
           notes: `${item.packSize} - ${item.description}`
         });
         
-        // Update or insert inventory_current
         const { data: existing } = await supabase
           .from('inventory_current')
           .select('quantity')
@@ -665,7 +680,7 @@ export default function ConsolidatedOrderingPage() {
         if (existing) {
           await supabase
             .from('inventory_current')
-            .update({ 
+            .update({
               quantity: (existing.quantity || 0) + qty,
               last_counted: now
             })
@@ -681,10 +696,9 @@ export default function ConsolidatedOrderingPage() {
             });
         }
         
-        // Update vendor price if changed
         await supabase
           .from('ingredient_vendors')
-          .update({ 
+          .update({
             case_price: item.casePrice,
             vendor_description: item.description,
             item_number: item.supc,
@@ -693,10 +707,9 @@ export default function ConsolidatedOrderingPage() {
           .eq('ingredient_name', item.ingredientName)
           .eq('vendor', 'Sysco');
         
-        // Sync to main ingredients table (keep in sync)
         await supabase
           .from('ingredients')
-          .update({ 
+          .update({
             case_price: item.casePrice,
             pack_size: item.packSize,
             updated_at: now
@@ -704,7 +717,6 @@ export default function ConsolidatedOrderingPage() {
           .eq('name', item.ingredientName);
       }
       
-      // Reload inventory
       await loadInventory();
       
       setShowInvoiceUpload(false);
@@ -724,24 +736,20 @@ export default function ConsolidatedOrderingPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load class requisitions
       const { data: reqs } = await supabase.from('requisitions').select('*').order('created_at', { ascending: false });
       
-      // Load catering events (confirmed or inquiry status, with items)
       const { data: events } = await supabase
         .from('catering_events')
         .select('*')
         .in('status', ['confirmed', 'inquiry', 'quoted'])
         .order('event_date', { ascending: true });
       
-      // Load PD workshops (confirmed or planned, with items)
       const { data: workshops } = await supabase
         .from('pd_workshops')
         .select('*')
         .in('status', ['confirmed', 'planned'])
         .order('workshop_date', { ascending: true });
       
-      // Transform catering events to requisition format
       const eventReqs = (events || []).filter(e => e.items && e.items.length > 0).map(e => ({
         id: e.id,
         course: 'CATERING',
@@ -756,7 +764,6 @@ export default function ConsolidatedOrderingPage() {
         department: e.department
       }));
       
-      // Transform PD workshops to requisition format
       const workshopReqs = (workshops || []).filter(w => w.items && w.items.length > 0).map(w => ({
         id: w.id,
         course: 'PD-WORKSHOP',
@@ -770,7 +777,6 @@ export default function ConsolidatedOrderingPage() {
         target_audience: w.target_audience
       }));
       
-      // Combine all requisitions
       const allReqs = [...(reqs || []), ...eventReqs, ...workshopReqs];
       
       const { data: ings } = await supabase.from('ingredients').select('*');
@@ -785,14 +791,9 @@ export default function ConsolidatedOrderingPage() {
     if (archived) setArchivedOrders(JSON.parse(archived));
   };
 
-  // Extract unique values for filters
-
-
-  // Session start dates for 2026
-  const SESSION_1_START = new Date("2026-01-12"); // Monday of week containing Jan 15
+  const SESSION_1_START = new Date("2026-01-12");
   const SESSION_2_START = new Date("2026-03-23");
 
-  // Get week number based on semester start
   const getWeekNumber = (classDate) => {
     const { start } = getWeekRange(classDate);
     if (start >= SESSION_2_START) {
@@ -804,7 +805,6 @@ export default function ConsolidatedOrderingPage() {
     }
   };
 
-  // Extract unique values for filters
   const filterOptions = useMemo(() => {
     const weekMap = new Map();
     const instructors = new Set();
@@ -834,54 +834,47 @@ export default function ConsolidatedOrderingPage() {
     };
   }, [requisitions]);
 
-  // Set default week to upcoming semester week
   useEffect(() => {
     if (filterWeek === null && filterOptions.weeks.length > 0) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      // Find the first week that starts today or in the future
       const upcomingWeek = filterOptions.weeks.find(w => w.start >= today);
       
       if (upcomingWeek) {
         setFilterWeek(upcomingWeek.key);
       } else {
-        // If no upcoming weeks, default to the last week (most recent)
         setFilterWeek(filterOptions.weeks[filterOptions.weeks.length - 1]?.key || 'all');
       }
     }
   }, [filterOptions.weeks, filterWeek]);
 
-
-
-  // Filter requisitions based on selected filters
+  // UPDATED: Filter requisitions based on multi-select
   const filteredRequisitions = useMemo(() => {
     return requisitions.filter(req => {
-      // Week filter - compare by Monday ISO date key
+      // Week filter
       if (filterWeek && filterWeek !== "all" && req.class_date) {
         const { start } = getWeekRange(req.class_date);
         const reqWeekKey = start.toISOString().split("T")[0];
         if (reqWeekKey !== filterWeek) return false;
       }
       
-      // Instructor filter
-      if (filterInstructor !== 'all' && req.instructor !== filterInstructor) return false;
+      // Instructor filter - NOW MULTI-SELECT
+      if (filterInstructors.length > 0 && !filterInstructors.includes(req.instructor)) return false;
       
-      // Course filter
-      if (filterCourse !== 'all' && req.course !== filterCourse) return false;
+      // Course filter - NOW MULTI-SELECT
+      if (filterCourses.length > 0 && !filterCourses.includes(req.course)) return false;
       
       return true;
     });
-  }, [requisitions, filterWeek, filterInstructor, filterCourse]);
+  }, [requisitions, filterWeek, filterInstructors, filterCourses]);
 
-  // Build ingredient map
   const ingMap = useMemo(() => {
     const map = {};
     ingredients.forEach(ing => { map[ing.name?.toLowerCase()] = ing; });
     return map;
   }, [ingredients]);
 
-  // Consolidate filtered requisitions
   const consolidateByVendor = useMemo(() => {
     const vendorMap = {};
     
@@ -893,7 +886,6 @@ export default function ConsolidatedOrderingPage() {
         const ing = ingMap[item.name?.toLowerCase()] || {};
         const category = ing.category || 'Unknown';
         
-        // Item type filter
         if (filterItemType === 'perishable' && !PERISHABLE_CATEGORIES.includes(category)) return;
         if (filterItemType === 'non-perishable' && !NON_PERISHABLE_CATEGORIES.includes(category)) return;
         
@@ -928,7 +920,6 @@ export default function ConsolidatedOrderingPage() {
       });
     });
     
-    // Calculate grocery flag and totals
     Object.keys(vendorMap).forEach(vendor => {
       vendorMap[vendor].requisitions = Array.from(vendorMap[vendor].requisitions);
       vendorMap[vendor].itemsList = Object.values(vendorMap[vendor].items).map(item => {
@@ -937,21 +928,18 @@ export default function ConsolidatedOrderingPage() {
         return item;
       });
       
-      // Apply grocery filter
       if (showGroceryOnly) {
         vendorMap[vendor].itemsList = vendorMap[vendor].itemsList.filter(item => item.isGrocery);
       }
       
       vendorMap[vendor].totalItems = vendorMap[vendor].itemsList.length;
       vendorMap[vendor].totalValue = vendorMap[vendor].itemsList.reduce((sum, item) => {
-        // Estimate cost based on unit price * quantity
         const cost = (item.unitPrice || 0) * (item.quantity || 0);
         return sum + cost;
       }, 0);
       vendorMap[vendor].groceryCount = vendorMap[vendor].itemsList.filter(i => i.isGrocery).length;
     });
     
-    // Remove empty vendors
     Object.keys(vendorMap).forEach(vendor => {
       if (vendorMap[vendor].totalItems === 0) delete vendorMap[vendor];
     });
@@ -959,11 +947,9 @@ export default function ConsolidatedOrderingPage() {
     return vendorMap;
   }, [filteredRequisitions, ingMap, filterItemType, showGroceryOnly]);
 
-  // Consolidate items by Category for On-Hand mode
   const consolidateByCategory = useMemo(() => {
     const categoryMap = {};
     
-    // Flatten all items from all vendors
     Object.values(consolidateByVendor).forEach(vendorData => {
       vendorData.itemsList.forEach(item => {
         const category = item.category || 'Other';
@@ -971,7 +957,6 @@ export default function ConsolidatedOrderingPage() {
           categoryMap[category] = { items: [], totalItems: 0 };
         }
         
-        // Check if item already exists in this category
         const existing = categoryMap[category].items.find(i => i.name === item.name);
         if (existing) {
           existing.quantity += item.quantity;
@@ -981,7 +966,6 @@ export default function ConsolidatedOrderingPage() {
       });
     });
     
-    // Sort items within each category and calculate totals
     Object.keys(categoryMap).forEach(cat => {
       categoryMap[cat].items.sort((a, b) => a.name.localeCompare(b.name));
       categoryMap[cat].totalItems = categoryMap[cat].items.length;
@@ -990,7 +974,6 @@ export default function ConsolidatedOrderingPage() {
     return categoryMap;
   }, [consolidateByVendor]);
 
-  // Define category order for On-Hand mode (matches storage locations)
   const categoryOrder = ['Produce', 'Dairy & Eggs', 'Meat & Seafood', 'Bakery & Bread', 'Frozen', 'Pantry', 'Beverages', 'Wine & Spirits', 'Other'];
 
   const saveToArchive = () => {
@@ -998,7 +981,7 @@ export default function ConsolidatedOrderingPage() {
       id: Date.now(),
       date: new Date().toISOString(),
       orders: consolidateByVendor,
-      filters: { week: filterWeek, instructor: filterInstructor, course: filterCourse, itemType: filterItemType },
+      filters: { week: filterWeek, instructors: filterInstructors, courses: filterCourses, itemType: filterItemType },
       requisitionIds: filteredRequisitions.map(r => r.id),
       summary: {
         vendors: Object.keys(consolidateByVendor).length,
@@ -1025,18 +1008,15 @@ export default function ConsolidatedOrderingPage() {
     const date = new Date().toLocaleDateString();
     const filterInfo = [
       filterWeek !== 'all' ? `Week: ${filterWeek}` : '',
-      filterInstructor !== 'all' ? `Instructor: ${filterInstructor}` : '',
-      filterCourse !== 'all' ? `Course: ${filterCourse}` : '',
+      filterInstructors.length > 0 ? `Instructors: ${filterInstructors.join(', ')}` : '',
+      filterCourses.length > 0 ? `Courses: ${filterCourses.join(', ')}` : '',
       filterItemType !== 'all' ? `Type: ${filterItemType}` : ''
     ].filter(Boolean).join(' | ');
     
-    // Calculate AP order quantities with on-hand, overrides, and vendor alternatives
     const itemsToOrder = items.map(item => {
-      // Check for vendor alternative (case-insensitive)
       const alternatives = vendorAlternatives[item.name?.toLowerCase()] || [];
       const selectedVendorData = getSelectedVendor(item.name);
       
-      // Use selected vendor's data if available
       const activePackSize = selectedVendorData?.pack_size || item.caseSize;
       const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
       const activeItemNumber = selectedVendorData?.item_number || item.itemNumber;
@@ -1128,7 +1108,6 @@ export default function ConsolidatedOrderingPage() {
     }, 100);
   };
 
-  // Generate instructor confirmations from filtered requisitions
   const getInstructorConfirmations = () => {
     const byInstructor = {};
     filteredRequisitions.forEach(req => {
@@ -1155,22 +1134,18 @@ export default function ConsolidatedOrderingPage() {
     return Object.values(byInstructor);
   };
 
-  // Print confirmation for one instructor
   const printConfirmation = (conf) => {
     const printWindow = window.open('', '_blank');
     const date = new Date().toLocaleDateString();
     
-    // Standardize all units to oz, lb, or ct
     const standardizeUnit = (qty, unit) => {
       const u = unit.toLowerCase().replace(/\s+/g, '');
       
-      // Weight - keep oz as oz, lb as lb
       if (u === 'oz') return { qty, unit: 'oz' };
       if (u === 'lb') return { qty, unit: 'lb' };
       if (u === 'g') return { qty: qty * 0.035274, unit: 'oz' };
       if (u === 'kg') return { qty: qty * 2.20462, unit: 'lb' };
       
-      // Volume → oz
       if (u === 'floz' || u === 'fl oz') return { qty, unit: 'oz' };
       if (u === 'cup') return { qty: qty * 8, unit: 'oz' };
       if (u === 'pt') return { qty: qty * 16, unit: 'oz' };
@@ -1179,31 +1154,27 @@ export default function ConsolidatedOrderingPage() {
       if (u === 'ml') return { qty: qty * 0.033814, unit: 'oz' };
       if (u === 'l') return { qty: qty * 33.814, unit: 'oz' };
       
-      // Count items → ct
       if (u === 'ct' || u === 'ea' || u === 'each') return { qty, unit: 'ct' };
       if (u === 'doz') return { qty: qty * 12, unit: 'ct' };
       if (u === 'bunch' || u === 'bu') return { qty, unit: 'ct' };
       
-      // Default to ct for unknown
       return { qty, unit: 'ct' };
     };
     
-    // Pre-process requisitions
     const processedReqs = conf.requisitions.map(req => {
       const aggregated = {};
       req.items.forEach(item => {
         const key = item.name;
         if (!aggregated[key]) {
-          aggregated[key] = { 
-            name: item.name, 
-            rawQty: 0, 
+          aggregated[key] = {
+            name: item.name,
+            rawQty: 0,
             rawUnit: item.unit
           };
         }
         aggregated[key].rawQty += parseFloat(item.quantity) || 0;
       });
       
-      // Convert to standard units (oz or ct)
       Object.values(aggregated).forEach(item => {
         const std = standardizeUnit(item.rawQty, item.rawUnit);
         item.epQty = std.qty;
@@ -1280,7 +1251,6 @@ export default function ConsolidatedOrderingPage() {
                   if (item.epUnit === 'oz') {
                     ozVal = item.epQty.toFixed(2);
                   } else if (item.epUnit === 'lb') {
-                    // If fractional lb, convert to oz
                     if (item.epQty < 1) {
                       ozVal = (item.epQty * 16).toFixed(2);
                     } else {
@@ -1335,10 +1305,8 @@ export default function ConsolidatedOrderingPage() {
     printWindow.focus();
   };
 
-  // Email confirmation (opens email client)
   const emailConfirmation = (conf) => {
     const classDetails = conf.requisitions.map(req => {
-      // Aggregate items within this requisition
       const aggregated = {};
       req.items.forEach(item => {
         const key = `${item.name}|${item.unit}`;
@@ -1371,8 +1339,8 @@ export default function ConsolidatedOrderingPage() {
 
   const clearFilters = () => {
     setFilterWeek('all');
-    setFilterInstructor('all');
-    setFilterCourse('all');
+    setFilterInstructors([]);
+    setFilterCourses([]);
     setFilterItemType('all');
     setShowGroceryOnly(false);
     setSelectedVendor('all');
@@ -1382,7 +1350,7 @@ export default function ConsolidatedOrderingPage() {
   const displayOrders = selectedArchive ? selectedArchive.orders : consolidateByVendor;
   const displayVendors = Object.keys(displayOrders).sort();
   
-  const hasActiveFilters = (filterWeek && filterWeek !== 'all') || filterInstructor !== 'all' || filterCourse !== 'all' || filterItemType !== 'all' || showGroceryOnly;
+  const hasActiveFilters = (filterWeek && filterWeek !== 'all') || filterInstructors.length > 0 || filterCourses.length > 0 || filterItemType !== 'all' || showGroceryOnly;
 
   if (loading) return <div className="p-6 flex items-center justify-center"><div className="text-gray-500">Loading orders...</div></div>;
 
@@ -1393,7 +1361,7 @@ export default function ConsolidatedOrderingPage() {
           <div>
             <h1 className="text-3xl font-bold text-blue-800">Consolidated Orders</h1>
             <p className="text-gray-600">
-              {viewMode === 'current' 
+              {viewMode === 'current'
                 ? `${filteredRequisitions.length} requisitions → ${vendors.length} vendors`
                 : `${archivedOrders.length} archived orders`}
             </p>
@@ -1401,8 +1369,8 @@ export default function ConsolidatedOrderingPage() {
           <div className="flex gap-2">
             <button onClick={() => { setViewMode('current'); setSelectedArchive(null); }} className={`px-4 py-2 rounded font-medium transition-colors ${viewMode === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Orders</button>
             <button onClick={() => setViewMode('archive')} className={`px-4 py-2 rounded font-medium transition-colors flex items-center gap-2 ${viewMode === 'archive' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}><ArchiveIcon />Archive ({archivedOrders.length})</button>
-            <button 
-              onClick={() => setShowConfirmations(true)} 
+            <button
+              onClick={() => setShowConfirmations(true)}
               disabled={filteredRequisitions.length === 0}
               className="px-4 py-2 rounded font-medium transition-colors bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -1432,17 +1400,21 @@ export default function ConsolidatedOrderingPage() {
                 {filterOptions.weeks.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
               </select>
               
-              {/* Instructor Filter */}
-              <select value={filterInstructor} onChange={(e) => setFilterInstructor(e.target.value)} className="px-3 py-2 border rounded-lg text-sm">
-                <option value="all">All Instructors</option>
-                {filterOptions.instructors.map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
+              {/* Instructor Multi-Select */}
+              <MultiSelectDropdown
+                label="Instructors"
+                options={filterOptions.instructors}
+                selected={filterInstructors}
+                onChange={setFilterInstructors}
+              />
               
-              {/* Course Filter */}
-              <select value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)} className="px-3 py-2 border rounded-lg text-sm">
-                <option value="all">All Courses</option>
-                {filterOptions.courses.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              {/* Course Multi-Select */}
+              <MultiSelectDropdown
+                label="Courses"
+                options={filterOptions.courses}
+                selected={filterCourses}
+                onChange={setFilterCourses}
+              />
               
               {/* Item Type Filter */}
               <select value={filterItemType} onChange={(e) => setFilterItemType(e.target.value)} className={`px-3 py-2 border rounded-lg text-sm ${filterItemType !== 'all' ? 'bg-blue-50 border-blue-300' : ''}`}>
@@ -1470,17 +1442,35 @@ export default function ConsolidatedOrderingPage() {
               )}
             </div>
             
+            {/* Active Filter Badges */}
+            {(filterInstructors.length > 0 || filterCourses.length > 0) && (
+              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
+                {filterInstructors.map(inst => (
+                  <span key={inst} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                    {inst}
+                    <button onClick={() => setFilterInstructors(filterInstructors.filter(i => i !== inst))} className="hover:text-blue-900 ml-1">×</button>
+                  </span>
+                ))}
+                {filterCourses.map(course => (
+                  <span key={course} className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
+                    {course}
+                    <button onClick={() => setFilterCourses(filterCourses.filter(c => c !== course))} className="hover:text-green-900 ml-1">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            
             {/* Sort Toggle */}
             <div className="flex items-center gap-2 mt-3 pt-3 border-t">
               <span className="text-sm font-medium text-gray-600">Group by:</span>
-              <button 
-                onClick={() => setSortBy('vendor')} 
+              <button
+                onClick={() => setSortBy('vendor')}
                 className={`px-3 py-1.5 rounded text-sm font-medium ${sortBy === 'vendor' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 Vendor
               </button>
-              <button 
-                onClick={() => setSortBy('category')} 
+              <button
+                onClick={() => setSortBy('category')}
                 className={`px-3 py-1.5 rounded text-sm font-medium ${sortBy === 'category' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 📦 Category
@@ -1545,11 +1535,11 @@ export default function ConsolidatedOrderingPage() {
                       </div>
                       <div className="text-sm text-gray-600 mt-1">
                         {archive.summary.vendors} vendors • {archive.summary.totalItems} items • ${archive.summary.totalValue.toFixed(2)} est.
-                        {archive.filters && (archive.filters.week !== 'all' || archive.filters.course !== 'all') && (
+                        {archive.filters && (archive.filters.week !== 'all' || (archive.filters.courses && archive.filters.courses.length > 0)) && (
                           <span className="ml-2 text-blue-600">
                             {[
                               archive.filters.week !== 'all' ? archive.filters.week : '',
-                              archive.filters.course !== 'all' ? archive.filters.course : ''
+                              archive.filters.courses?.length > 0 ? archive.filters.courses.join(', ') : ''
                             ].filter(Boolean).join(' • ')}
                           </span>
                         )}
@@ -1627,28 +1617,22 @@ export default function ConsolidatedOrderingPage() {
                         </thead>
                         <tbody>
                           {data.itemsList.map((item, idx) => {
-                            // Check for vendor alternatives (case-insensitive)
                             const alternatives = vendorAlternatives[item.name?.toLowerCase()] || [];
                             const selectedVendorData = getSelectedVendor(item.name);
                             const hasAlternatives = alternatives.length > 1;
                             
-                            // Use selected vendor's data if available, otherwise use item data
                             const activePackSize = selectedVendorData?.pack_size || item.caseSize;
                             const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
                             const activeItemNumber = selectedVendorData?.item_number || item.itemNumber;
                             const activeVendor = selectedVendorData?.vendor || item.vendor;
                             
-                            // Calculate AP conversion
                             const apCalc = calculateAPOrder(item.quantity, item.unit, activePackSize);
-                            // Minimum 1 unit/case even if EP need is tiny
                             const calculatedOrder = Math.max(1, apCalc.casesNeeded || Math.ceil(item.quantity));
                             const isUnit = activePackSize?.startsWith('1/');
                             
-                            // Get on-hand and order values
                             const onHand = getOnHand(vendor, item.name);
                             const orderOverride = getOrderOverride(vendor, item.name);
                             
-                            // Calculate effective order
                             let effectiveOrder = calculatedOrder;
                             if (orderOverride !== '') {
                               effectiveOrder = orderOverride;
@@ -1656,7 +1640,6 @@ export default function ConsolidatedOrderingPage() {
                               effectiveOrder = Math.max(0, calculatedOrder - onHand);
                             }
                             
-                            // Estimate cost based on case price
                             const hasInput = onHand !== '' || orderOverride !== '';
                             const estCost = effectiveOrder * activeCasePrice;
                             
@@ -1743,7 +1726,6 @@ export default function ConsolidatedOrderingPage() {
                               let total = 0;
                               let hasAnyInput = false;
                               data.itemsList.forEach(item => {
-                                // Check for vendor alternative
                                 const selectedVendorData = getSelectedVendor(item.name);
                                 const activePackSize = selectedVendorData?.pack_size || item.caseSize;
                                 const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
@@ -1777,7 +1759,6 @@ export default function ConsolidatedOrderingPage() {
                   const catData = consolidateByCategory[category];
                   if (!catData || catData.items.length === 0) return null;
                   
-                  // Category colors
                   const catColors = {
                     'Produce': 'bg-green-100 border-green-300',
                     'Dairy & Eggs': 'bg-yellow-100 border-yellow-300',
@@ -1810,12 +1791,10 @@ export default function ConsolidatedOrderingPage() {
                           </thead>
                           <tbody>
                             {catData.items.map((item, idx) => {
-                              // Check for vendor alternatives (case-insensitive)
                               const alternatives = vendorAlternatives[item.name?.toLowerCase()] || [];
                               const selectedVendorData = getSelectedVendor(item.name);
                               const hasAlternatives = alternatives.length > 1;
                               
-                              // Use selected vendor's data if available
                               const activePackSize = selectedVendorData?.pack_size || item.caseSize;
                               const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
                               const activeVendor = selectedVendorData?.vendor || item.vendor;
@@ -1929,7 +1908,6 @@ export default function ConsolidatedOrderingPage() {
                     Object.entries(displayOrders).forEach(([vendor, v]) => {
                       if (!v || !v.itemsList) return;
                       v.itemsList.forEach(item => {
-                        // Check for vendor alternative
                         const selectedVendorData = getSelectedVendor(item.name);
                         const activePackSize = selectedVendorData?.pack_size || item.caseSize;
                         const activeCasePrice = selectedVendorData?.case_price || item.casePrice || item.unitPrice || 0;
@@ -1981,13 +1959,13 @@ export default function ConsolidatedOrderingPage() {
                             <p className="text-sm text-gray-600">{conf.requisitions.length} class{conf.requisitions.length !== 1 ? 'es' : ''}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button 
+                            <button
                               onClick={() => printConfirmation(conf)}
                               className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
                             >
                               <PrintIcon /> Print
                             </button>
-                            <button 
+                            <button
                               onClick={() => emailConfirmation(conf)}
                               className="px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700"
                             >
@@ -2100,7 +2078,7 @@ export default function ConsolidatedOrderingPage() {
                               </span>
                             </div>
                           ) : (
-                            <select 
+                            <select
                               className="w-full px-2 py-1 border rounded text-sm"
                               value={item.ingredientName}
                               onChange={(e) => {

@@ -293,3 +293,4 @@ export const resetInstructorPassword = async (id, lastName) => {
     .eq('id', id);
   return { error };
 };
+

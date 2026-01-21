@@ -188,12 +188,13 @@ export default function Navigation() {
   if (location.pathname === '/instructor') return null;
 
   const navGroups = [
-    { label: 'Ordering', icon: Icons.Order, items: [
+    { label: 'Requisitions', icon: Icons.Order, items: [
+      { path: '/requisitions', label: 'All Requisitions', description: 'View and manage requisitions' },
       { path: '/create', label: 'New Requisition', description: 'Create a new lab requisition' },
-      { path: '/requisitions/instructor', label: 'Instructor View', description: 'Preview instructor interface' },
-      { path: '/requisitions', label: 'Archive', description: 'View past requisitions' },
+      { path: '/confirmations', label: 'Confirmation Tracker', description: 'Track status and send reminders' },
+      { path: '/smart-order', label: 'Smart Order', description: 'Consolidate and place orders' },
       { path: '/consolidated', label: 'Consolidated Order', description: 'Group orders by vendor' },
-      { path: '/pull-list', label: 'Pull List', description: 'Generate pull lists' },
+      { path: '/pull-list', label: 'Pull List', description: 'Generate pull lists by class' },
     ]},
     { label: 'Inventory', icon: Icons.Inventory, items: [
       { path: '/inventory', label: 'Dashboard', description: 'Inventory overview' },
@@ -212,7 +213,7 @@ export default function Navigation() {
     ]},
   ];
 
-  const isGroupActive = (group) => group.items.some((item) => 
+  const isGroupActive = (group) => group.items.some((item) =>
     item.path === '/inventory' ? location.pathname === '/inventory' : location.pathname.startsWith(item.path)
   );
 

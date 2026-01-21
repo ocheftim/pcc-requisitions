@@ -25,25 +25,17 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
   const [submittedReq, setSubmittedReq] = useState(null);
   const [detailedView, setDetailedView] = useState(false);
   const [studentCount, setStudentCount] = useState(14);
-  const [baseStudentCount, setBaseStudentCount] = useState(14);
   const [editingRequisitionId, setEditingRequisitionId] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [swapSearch, setSwapSearch] = useState('');
   const [pendingEdits, setPendingEdits] = useState([]);
-  const [approvalStatus, setApprovalStatus] = useState("pending");
-  const [approvalComment, setApprovalComment] = useState("");
   const [notes, setNotes] = useState('');
 
+  // Updated instructor list - only active instructors
   const instructors = [
-    'Cabrera',
-    'Kouchit',
-    'McKoy',
     'Mikesell',
     'Moreno',
-    "O'Donnell",
-    'Toscano',
-    'Wong',
-    'Kouchit'
+    'Wong'
   ];
 
   useEffect(() => {
@@ -75,9 +67,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
         }
       };
       loadRequisition();
-
     }
-
 
     const reqToEdit = localStorage.getItem('requisitionToEdit');
     const reqToCopy = localStorage.getItem('requisitionToCopy');
@@ -198,7 +188,6 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       loadRequisition();
     }
 
-
     const loadAllIngredients = async () => {
       try {
         const ingredients = await getIngredients();
@@ -254,7 +243,6 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
 
   const getUnitCost = (item) => {
     if (item.isCustom) return item.unitCost || 0;
-    // Look up current price from ingredients list
     const ing = allIngredients.find(i => i.name?.toLowerCase() === item.name?.toLowerCase());
     if (ing) {
       if (ing.unitPrice) return ing.unitPrice;
@@ -266,9 +254,6 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
     return item.unitCost || item.unitPrice || 0;
   };
 
-  
-
-  // Track edit and swap item
   const swapItem = async (oldItem, newItem, reason = '') => {
     const edit = {
       requisition_id: editingRequisitionId,
@@ -280,10 +265,8 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       instructor: instructor
     };
     
-    // Save to pending edits (will be saved when requisition is updated)
     setPendingEdits(prev => [...prev, edit]);
     
-    // Update order items - preserve position with correct pricing
     const unitCost = getUnitCost(newItem);
     const newItems = {};
     Object.entries(orderItems).forEach(([key, val]) => {
@@ -293,6 +276,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           quantity: oldItem.quantity,
           unitCost: unitCost,
           isFromMainList: true,
+          source: 'instructor_added',
           note: `Sub for ${oldItem.name}${reason ? ': ' + reason : ''}`
         };
       } else {
@@ -304,16 +288,6 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
     setSwapSearch('');
   };
 
-  // Save edits to database
-  const saveEditsToDb = async (reqId) => {
-    if (pendingEdits.length === 0) return;
-    for (const edit of pendingEdits) {
-      await supabase.from('requisition_edits').insert({ ...edit, requisition_id: reqId });
-    }
-    setPendingEdits([]);
-  };
-
-  // Swap search results
   const swapSearchResults = useMemo(() => {
     if (!swapSearch || swapSearch.length < 2) return [];
     const term = swapSearch.toLowerCase();
@@ -334,7 +308,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       if (item) {
         setOrderItems({
           ...orderItems,
-          [itemId]: { ...item, quantity: qty }
+          [itemId]: { ...item, quantity: qty, source: orderItems[itemId]?.source || 'instructor_added' }
         });
       }
     }
@@ -349,14 +323,20 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
     }
   };
 
+  // Add item from search - mark as instructor_added
   const addFromSearch = (item) => {
     setOrderItems({
       ...orderItems,
-      [item.id]: { ...item, quantity: 1 }
+      [item.id]: { 
+        ...item, 
+        quantity: 1,
+        source: 'instructor_added'
+      }
     });
     setSearchTerm('');
   };
 
+  // Add custom item - mark as instructor_added
   const addCustomItem = () => {
     if (!customItemName || !customItemCost) return;
     const id = `CUSTOM-${Date.now()}`;
@@ -368,7 +348,8 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
         unit: customItemUnit,
         unitCost: parseFloat(customItemCost),
         quantity: 1,
-        isCustom: true
+        isCustom: true,
+        source: 'instructor_added'
       }
     });
     setCustomItemName('');
@@ -393,7 +374,8 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       return {
         ...item,
         unitCost,
-        extended: (item.quantity || 0) * unitCost
+        extended: (item.quantity || 0) * unitCost,
+        source: item.source || 'instructor_added'
       };
     });
     if (items.length === 0) {
@@ -412,7 +394,8 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
       budget: labBudget,
       items,
       notes,
-      status: 'submitted'
+      status: 'submitted',
+      workflow_status: 'created'
     };
     
     try {
@@ -442,6 +425,16 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
     setNotes('');
     setEditingRequisitionId(null);
   };
+
+  // Count items by source
+  const itemCounts = useMemo(() => {
+    const items = Object.values(orderItems);
+    return {
+      recipe: items.filter(i => i.source === 'recipe').length,
+      added: items.filter(i => i.source === 'instructor_added' || !i.source).length,
+      total: items.length
+    };
+  }, [orderItems]);
 
   if (submitted && submittedReq) {
     return (
@@ -671,7 +664,8 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
                   quantity: Math.ceil(ing.quantity * 10) / 10,
                   cost_per_unit: 0,
                   total: 0,
-                  notes: ""
+                  source: 'recipe',
+                  recipe_name: ing.recipeName || ''
                 };
               });
               setOrderItems(newItems);
@@ -680,13 +674,15 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
               const newItems = {};
               ingredients.forEach((ing, idx) => {
                 const id = `recipe-ing-${idx}`;
+                const recipeSources = ing.sources?.map(s => s.recipe).join(", ") || '';
                 newItems[id] = {
                   id,
                   name: ing.name,
                   unit: ing.unit,
                   quantity: Math.ceil(ing.quantity * 10) / 10,
                   cost_per_unit: 0,
-                  notes: `From: ${ing.sources.map(s => s.recipe).join(", ")}`
+                  source: 'recipe',
+                  recipe_name: recipeSources
                 };
               });
               setOrderItems(prev => ({ ...prev, ...newItems }));
@@ -815,7 +811,13 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
         {Object.keys(orderItems).length > 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-blue-800">Your Order ({Object.keys(orderItems).length} items)</h3>
+              <div>
+                <h3 className="text-lg font-semibold text-blue-800">Your Order ({itemCounts.total} items)</h3>
+                <p className="text-sm text-gray-500">
+                  <span className="text-green-600">{itemCounts.recipe} from recipes</span>
+                  {itemCounts.added > 0 && <span className="ml-2 text-blue-600">• {itemCounts.added} added</span>}
+                </p>
+              </div>
               {!hideNav && <div className="flex gap-2">
                 <button onClick={clearForm} className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm">Clear All</button>
                 <button 
@@ -830,6 +832,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="text-left px-3 py-2">Item</th>
+                  <th className="text-left px-3 py-2 w-20">Source</th>
                   <th className="text-left px-3 py-2">Unit</th>
                   <th className="text-right px-3 py-2">Cost/Unit</th>
                   <th className="text-center px-3 py-2 w-24">Qty</th>
@@ -840,7 +843,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
               </thead>
               <tbody>
                 {Object.values(orderItems).map(item => (
-                  <tr key={item.id} className="border-t">
+                  <tr key={item.id} className={`border-t ${item.source === 'recipe' ? 'bg-green-50' : ''}`}>
                     <td className="px-3 py-2 font-medium">
                       {editingItemId === item.id ? (
                         <div className="relative">
@@ -879,6 +882,17 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
                         >{item.name}</span>
                       )}
                     </td>
+                    <td className="px-3 py-2">
+                      {item.source === 'recipe' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700" title={item.recipe_name || ''}>
+                          📗 Recipe
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                          ➕ Added
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">{item.unit}</td>
                     <td className="px-3 py-2 text-right">${getUnitCost(item).toFixed(2)}</td>
                     <td className="px-3 py-2">
@@ -914,7 +928,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
               </tbody>
               <tfoot className="bg-gray-50">
                 <tr>
-                  <td colSpan="4" className="px-3 py-2 text-right font-semibold">Total:</td>
+                  <td colSpan="5" className="px-3 py-2 text-right font-semibold">Total:</td>
                   <td className="px-3 py-2 text-right font-bold text-lg">${totalCost.toFixed(2)}</td>
                   <td colSpan="2"></td>
                 </tr>
@@ -1010,8 +1024,6 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
           ))}
         </div>
         )}
-
-
 
         {Object.keys(orderItems).length > 0 && !hideNav && (
           <div className="sticky bottom-4 bg-white rounded-lg shadow-lg border border-gray-300 p-4 flex justify-between items-center">
