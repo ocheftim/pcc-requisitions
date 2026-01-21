@@ -103,7 +103,7 @@ export default function SmartOrderPage() {
   const [vendorFilter, setVendorFilter] = useState('all');
   
   // Filters
-  const [selectedCourse, setSelectedCourse] = useState('');
+  const [selectedCourses, setSelectedCourses] = useState([]);
   const [selectedTerm, setSelectedTerm] = useState('term1');
 
   // Load requisitions
@@ -154,19 +154,14 @@ export default function SmartOrderPage() {
     return Array.from(courses).sort();
   }, [requisitions]);
 
-  // Auto-select first course
-  useEffect(() => {
-    if (!selectedCourse && availableCourses.length > 0) {
-      setSelectedCourse(availableCourses[0]);
-    }
-  }, [availableCourses, selectedCourse]);
+  // No auto-select - let user choose courses
 
-  // Filter requisitions by course and term
+  // Filter requisitions by courses and term
   const filteredRequisitions = useMemo(() => {
-    if (!selectedCourse) return [];
+    if (selectedCourses.length === 0) return [];
     return requisitions.filter(r => {
       const courseNormalized = (r.course || '').replace(/\s+/g, '').toUpperCase();
-      if (courseNormalized !== selectedCourse) return false;
+      if (!selectedCourses.includes(courseNormalized)) return false;
       
       // Filter by term
       const term = getTermForDate(r.class_date);
@@ -174,7 +169,7 @@ export default function SmartOrderPage() {
       
       return true;
     });
-  }, [requisitions, selectedCourse, selectedTerm]);
+  }, [requisitions, selectedCourses, selectedTerm]);
 
   // Build module list
   const modules = useMemo(() => {
@@ -184,6 +179,7 @@ export default function SmartOrderPage() {
       const moduleNum = extractModuleNumber(req.week);
       const topic = extractTopic(req.week);
       const dateStr = formatShortDate(req.class_date);
+      const course = (req.course || '').replace(/\s+/g, '').toUpperCase();
       
       moduleList.push({
         id: req.id,
@@ -192,6 +188,7 @@ export default function SmartOrderPage() {
         dateStr,
         date: req.class_date ? new Date(req.class_date) : null,
         itemCount: (req.ingredients || []).length,
+        course,
       });
     });
     
@@ -362,13 +359,14 @@ export default function SmartOrderPage() {
     
     // Get selected module info for header
     const selectedModules = modules.filter(m => selectedReqs.includes(m.id));
-    const moduleInfo = selectedModules.map(m => `Mod ${m.moduleNum} (${m.dateStr})`).join(', ');
+    const moduleInfo = selectedModules.map(m => `${m.course} Mod ${m.moduleNum} (${m.dateStr})`).join(', ');
+    const courseList = selectedCourses.join(', ');
     
     let html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Order - ${selectedCourse} - ${new Date().toLocaleDateString()}</title>
+        <title>Order - ${courseList} - ${new Date().toLocaleDateString()}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; }
           h1 { font-size: 18px; margin-bottom: 5px; }
@@ -382,7 +380,7 @@ export default function SmartOrderPage() {
         </style>
       </head>
       <body>
-        <h1>${selectedCourse} Order</h1>
+        <h1>${courseList} Order</h1>
         <div class="meta">
           <div>${moduleInfo}</div>
           <div>Generated: ${new Date().toLocaleString()}</div>
@@ -454,21 +452,34 @@ export default function SmartOrderPage() {
       {/* Compact Filter Bar */}
       <div className="bg-white border rounded-lg p-3 mb-4">
         <div className="flex flex-wrap items-center gap-4">
-          {/* Course Dropdown */}
+          {/* Course Toggle Buttons */}
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-600">Course:</label>
-            <select
-              value={selectedCourse}
-              onChange={(e) => {
-                setSelectedCourse(e.target.value);
-                setSelectedReqs([]);
-              }}
-              className="px-3 py-1.5 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500"
-            >
-              {availableCourses.map(course => (
-                <option key={course} value={course}>{course}</option>
-              ))}
-            </select>
+            <label className="text-sm font-medium text-gray-600">Courses:</label>
+            <div className="flex gap-1">
+              {availableCourses.map(course => {
+                const isSelected = selectedCourses.includes(course);
+                return (
+                  <button
+                    key={course}
+                    onClick={() => {
+                      setSelectedCourses(prev => 
+                        prev.includes(course) 
+                          ? prev.filter(c => c !== course)
+                          : [...prev, course]
+                      );
+                      setSelectedReqs([]);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      isSelected
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {course}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Term Dropdown */}
@@ -480,7 +491,7 @@ export default function SmartOrderPage() {
                 setSelectedTerm(e.target.value);
                 setSelectedReqs([]);
               }}
-              className="px-3 py-1.5 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 border rounded-lg text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500"
             >
               {TERMS.map(term => (
                 <option key={term.id} value={term.id}>{term.name}</option>
@@ -489,44 +500,48 @@ export default function SmartOrderPage() {
           </div>
 
           {/* Divider */}
-          <div className="h-6 w-px bg-gray-300" />
+          {selectedCourses.length > 0 && <div className="h-6 w-px bg-gray-300" />}
 
           {/* Module Pills */}
-          <div className="flex items-center gap-2 flex-wrap flex-1">
-            <span className="text-sm font-medium text-gray-600">Modules:</span>
-            {modules.map(mod => {
-              const isSelected = selectedReqs.includes(mod.id);
-              const label = mod.topic 
-                ? `${mod.moduleNum} ${mod.topic} ${mod.dateStr}`
-                : `${mod.moduleNum} ${mod.dateStr}`;
-              return (
+          {selectedCourses.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap flex-1">
+              <span className="text-sm font-medium text-gray-600">Modules:</span>
+              {modules.map(mod => {
+                const isSelected = selectedReqs.includes(mod.id);
+                // Show course prefix if multiple courses selected
+                const coursePrefix = selectedCourses.length > 1 ? `${mod.course.replace('CUL', '')} ` : '';
+                const label = mod.topic 
+                  ? `${coursePrefix}${mod.moduleNum} ${mod.topic} ${mod.dateStr}`
+                  : `${coursePrefix}${mod.moduleNum} ${mod.dateStr}`;
+                return (
+                  <button
+                    key={mod.id}
+                    onClick={() => toggleModule(mod.id)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                    title={`${mod.course} - ${mod.itemCount} items`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              {modules.length > 0 && (
                 <button
-                  key={mod.id}
-                  onClick={() => toggleModule(mod.id)}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
-                    isSelected
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  onClick={selectAllModules}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                    modules.every(m => selectedReqs.includes(m.id))
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
-                  title={`${mod.itemCount} items`}
                 >
-                  {label}
+                  All
                 </button>
-              );
-            })}
-            {modules.length > 0 && (
-              <button
-                onClick={selectAllModules}
-                className={`px-2 py-1 rounded text-xs font-medium transition-all ${
-                  modules.every(m => selectedReqs.includes(m.id))
-                    ? 'bg-gray-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                All
-              </button>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -674,7 +689,17 @@ export default function SmartOrderPage() {
       )}
 
       {/* Empty state */}
-      {selectedReqs.length === 0 && (
+      {selectedCourses.length === 0 && (
+        <div className="bg-white border rounded-lg p-12 text-center text-gray-500">
+          <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <p className="text-lg font-medium text-gray-700 mb-1">Select courses to get started</p>
+          <p className="text-sm">Click the course buttons above, then select modules</p>
+        </div>
+      )}
+
+      {selectedCourses.length > 0 && selectedReqs.length === 0 && (
         <div className="bg-white border rounded-lg p-12 text-center text-gray-500">
           <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
