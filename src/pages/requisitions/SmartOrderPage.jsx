@@ -527,6 +527,7 @@ export default function SmartOrderPage() {
                 {modules.map(mod => {
                   const isSelected = selectedReqs.includes(mod.id);
                   const isEmpty = mod.itemCount === 0;
+                  const isPast = mod.date && mod.date < new Date(new Date().setHours(0,0,0,0));
                   const label = mod.topic 
                     ? `${mod.moduleNum} ${mod.topic} ${mod.dateStr}`
                     : `${mod.moduleNum} ${mod.dateStr}`;
@@ -535,18 +536,22 @@ export default function SmartOrderPage() {
                       key={mod.id}
                       onClick={() => toggleModule(mod.id)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
-                        isEmpty
+                        isPast
                           ? isSelected
-                            ? 'bg-red-500 text-white'
-                            : 'bg-red-50 text-red-400 border border-red-200 hover:bg-red-100'
-                          : isSelected
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-gray-400 text-white'
+                            : 'bg-gray-50 text-gray-400 border border-gray-200'
+                          : isEmpty
+                            ? isSelected
+                              ? 'bg-red-500 text-white'
+                              : 'bg-red-50 text-red-400 border border-red-200 hover:bg-red-100'
+                            : isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
-                      title={isEmpty ? 'No items - needs requisition' : `${mod.itemCount} items`}
+                      title={isPast ? 'Past date' : isEmpty ? 'No items - needs requisition' : `${mod.itemCount} items`}
                     >
                       {label}
-                      {isEmpty && <span className="ml-1 text-xs">⚠</span>}
+                      {isEmpty && !isPast && <span className="ml-1 text-xs">⚠</span>}
                     </button>
                   );
                 })}
