@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 23)); // January 23, 2026
+  const [currentDate, setCurrentDate] = useState(new Date()); // January 23, 2026
   
   // Sample data - replace with your actual data source
   const requisitions = [
@@ -26,15 +26,15 @@ const Dashboard = () => {
   ];
 
   const classSchedule = [
-    { code: 'CUL244', day: 'Monday', color: 'bg-amber-100 text-amber-800' },
-    { code: 'CUL130', day: 'Tuesday', color: 'bg-blue-100 text-blue-800' },
-    { code: 'CUL260', day: 'Wednesday', color: 'bg-amber-100 text-amber-800' },
-    { code: 'CUL160', day: 'Thursday', color: 'bg-blue-100 text-blue-800' },
+    { code: 'CUL244', day: 'Tuesday', color: 'bg-amber-100 text-amber-800' },
+    { code: 'CUL130', day: 'Wednesday', color: 'bg-blue-100 text-blue-800' },
+    { code: 'CUL260', day: 'Thursday', color: 'bg-amber-100 text-amber-800' },
+    { code: 'CUL160', day: 'Friday', color: 'bg-blue-100 text-blue-800' },
   ];
 
   // Calculate stats
   const stats = useMemo(() => {
-    const today = new Date(2026, 0, 23);
+    const today = new Date();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay());
     const weekEnd = new Date(weekStart);
@@ -110,7 +110,7 @@ const Dashboard = () => {
 
   const isToday = (day) => {
     if (!day) return false;
-    const today = new Date(2026, 0, 23);
+    const today = new Date();
     return day === today.getDate() && 
            currentDate.getMonth() === today.getMonth() && 
            currentDate.getFullYear() === today.getFullYear();
@@ -140,7 +140,7 @@ const Dashboard = () => {
             <p className="text-gray-300 text-sm">Lab Requisition Management</p>
           </div>
           <div className="text-right text-gray-300">
-            {formatDate(new Date(2026, 0, 23))}
+            {formatDate(new Date())}
           </div>
         </div>
       </header>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { getIngredients, saveRequisition, updateRequisition, supabase } from '../../lib/supabase';
 import { calculateUnitPrice } from "../../utils/packSizeParser";
 import { sendRequisitionEmails } from '../../lib/emailService';
@@ -7,6 +7,7 @@ import RecipeSelector from '../../components/requisitions/RecipeSelector';
 
 export default function InstructorRequisitionPage({ hideNav = false }) {
   const navigate = useNavigate();
+  const { id: routeId } = useParams();
   const [instructor, setInstructor] = useState('');
   const [classDate, setClassDate] = useState('');
   const [program, setProgram] = useState('');
@@ -43,7 +44,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
     const urlParams = new URLSearchParams(window.location.search);
     const editId = urlParams.get("edit");
     const viewId = urlParams.get("view");
-    const reqId = editId || viewId;
+    const reqId = routeId || editId || viewId;
     
     if (reqId) {
       const loadRequisition = async () => {
@@ -162,7 +163,7 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
     const urlParams = new URLSearchParams(window.location.search);
     const editId = urlParams.get("edit");
     const viewId = urlParams.get("view");
-    const reqId = editId || viewId;
+    const reqId = routeId || editId || viewId;
     
     if (reqId) {
       const loadRequisition = async () => {
@@ -631,6 +632,35 @@ export default function InstructorRequisitionPage({ hideNav = false }) {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Scale %</label>
+              <select
+                onChange={(e) => {
+                  const pct = parseFloat(e.target.value);
+                  if (pct && pct !== 100 && Object.keys(orderItems).length > 0) {
+                    const scale = pct / 100;
+                    const scaledItems = {};
+                    Object.entries(orderItems).forEach(([key, item]) => {
+                      const newQty = Math.round((item.quantity || 0) * scale * 100) / 100;
+                      scaledItems[key] = { ...item, quantity: newQty };
+                    });
+                    setOrderItems(scaledItems);
+                  }
+                  e.target.value = "100";
+                }}
+                defaultValue="100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="100">No change</option>
+                <option value="50">50%</option>
+                <option value="75">75%</option>
+                <option value="80">80%</option>
+                <option value="90">90%</option>
+                <option value="110">110%</option>
+                <option value="125">125%</option>
+                <option value="150">150%</option>
+              </select>
+            </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
