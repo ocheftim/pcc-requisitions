@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
-const FOOD_CATEGORIES = ['Produce', 'Dairy & Eggs', 'Meat', 'Seafood', 'Pantry', 'Frozen', 'Bakery'];
+const FOOD_CATEGORIES = ['produce','dairy & eggs','dairy','meat & seafood','pantry','pantry/dried fruit & nuts','pantry/nuts','flours','pantry/chocolates','chocolates','sugars','sweeteners','oils','baking','frozen','frozen foods','bakery & bread','bread','beverages','leaveners','spices','fruit','wine & spirits'];
 
 export default function PrintRequisitionPage() {
   const { id } = useParams();
@@ -29,13 +29,13 @@ export default function PrintRequisitionPage() {
   const items = typeof req.items === 'string' ? JSON.parse(req.items) : (req.items || []);
   const equipment = typeof req.equipment === 'string' ? JSON.parse(req.equipment) : (req.equipment || []);
   
-  const foodItems = items.filter(i => FOOD_CATEGORIES.includes(i.category));
-  const nonFoodItems = items.filter(i => !FOOD_CATEGORIES.includes(i.category));
+  const foodItems = items.filter(i => FOOD_CATEGORIES.includes((i.category || "").toLowerCase()));
+  const nonFoodItems = items.filter(i => !FOOD_CATEGORIES.includes((i.category || "").toLowerCase()));
   
-  const categoryOrder = ['Produce', 'Dairy & Eggs', 'Meat', 'Seafood', 'Pantry', 'Frozen', 'Bakery'];
+  const categoryOrder = ['Produce','Dairy & Eggs','Dairy','Meat & Seafood','Flours','Pantry/Chocolates','Chocolates','Sugars','Sweeteners','Pantry','Pantry/Dried Fruit & Nuts','Pantry/Nuts','Oils','Baking','Leaveners','Spices','Frozen','Frozen Foods','Bakery & Bread','Bread','Beverages','Fruit','Wine & Spirits'];
   const sortedFoodItems = [...foodItems].sort((a, b) => {
-    const aIdx = categoryOrder.indexOf(a.category);
-    const bIdx = categoryOrder.indexOf(b.category);
+    const aIdx = categoryOrder.findIndex(c => c.toLowerCase() === (a.category || '').toLowerCase());
+    const bIdx = categoryOrder.findIndex(c => c.toLowerCase() === (b.category || '').toLowerCase());
     if (aIdx !== bIdx) return aIdx - bIdx;
     return (a.name || '').localeCompare(b.name || '');
   });
@@ -118,8 +118,8 @@ export default function PrintRequisitionPage() {
 
   const handleCopyForEmail = () => {
     const categories = {};
-    const catOrder = ["Produce", "Dairy \& Eggs", "Meat", "Seafood", "Pantry", "Frozen", "Bakery", "Supplies", "Other"];
-    sortedFoodItems.forEach(item => {
+    const catOrder = ["Produce", "Dairy & Eggs", "Meat & Seafood", "Dairy", "Flours", "Baking", "Chocolates", "Sugars", "Leaveners", "Pantry", "Pantry/Nuts", "Frozen", "Frozen Foods", "Oils", "Spices", "Wine & Spirits", "Bakery & Bread", "Beverages", "Supplies", "Other"];
+    [...sortedFoodItems, ...nonFoodItems].forEach(item => {
       const cat = item.category || "Other";
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(item);
@@ -127,6 +127,13 @@ export default function PrintRequisitionPage() {
     const sorted = {};
     catOrder.forEach(cat => {
       if (categories[cat]) sorted[cat] = categories[cat].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    });
+    // Catch-all: include any categories not in catOrder
+    Object.keys(categories).forEach(cat => {
+      if (!sorted[cat]) sorted[cat] = categories[cat].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    });
+    Object.keys(categories).forEach(cat => {
+      if (!sorted[cat]) sorted[cat] = categories[cat].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     });
     let html = `<div style="font-family:Arial,sans-serif;font-size:14px;">`;
     html += `<h2 style="margin:0 0 12px 0;">Lab Requisition - ${req.course}</h2>`;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
@@ -15,6 +15,14 @@ const COURSES = [
   { id: 'CUL260', name: 'CUL260' },
 ];
 
+const SESSION_START = new Date("2026-01-12");
+const getWeekNumber = (d) => Math.max(1, Math.floor((new Date(d) - SESSION_START) / 604800000) + 1);
+const getWeekRange = (w) => {
+  const s = new Date(SESSION_START); s.setDate(s.getDate() + (w-1)*7);
+  const e = new Date(s); e.setDate(e.getDate() + 6);
+  return s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' - ' + e.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+};
+
 export default function OrdersPage() {
   const { tab } = useParams();
   const navigate = useNavigate();
@@ -25,6 +33,7 @@ export default function OrdersPage() {
   const [requisitions, setRequisitions] = useState([]);
   const [selectedReqs, setSelectedReqs] = useState([]);
   const [consolidatedItems, setConsolidatedItems] = useState([]);
+  const [selectedWeeks, setSelectedWeeks] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState('all');
@@ -56,7 +65,7 @@ export default function OrdersPage() {
       let query = supabase
         .from('requisitions')
         .select('*')
-        .eq('status', 'approved')
+        
         .order('class_date', { ascending: true });
 
       if (selectedCourse !== 'all') {
@@ -132,7 +141,7 @@ export default function OrdersPage() {
     selectedData.forEach(req => {
       const items = parseItems(req.items);
       items.forEach(item => {
-        const key = `${item.name}-${item.unit}`;
+        const key = item.name.toLowerCase().trim();
         if (itemMap.has(key)) {
           const existing = itemMap.get(key);
           existing.quantity += parseFloat(item.quantity) || 0;
@@ -179,35 +188,175 @@ export default function OrdersPage() {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + 'T12:00:00');
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
   };
 
+
+  // Group requisitions by week
+  const reqsByWeek = useMemo(() => {
+    const w = {};
+    requisitions.forEach(r => {
+      const n = getWeekNumber(r.class_date);
+      if (!w[n]) w[n] = { week: n, label: getWeekRange(n), reqs: [] };
+      w[n].reqs.push(r);
+    });
+    return Object.values(w).sort((a, b) => a.week - b.week);
+  }, [requisitions]);
+
+  const toggleWeek = (n) => {
+    const d = reqsByWeek.find(w => w.week === n);
+    if (!d) return;
+    const ids = d.reqs.map(r => r.id);
+    if (ids.every(id => selectedReqs.includes(id))) {
+      setSelectedReqs(p => p.filter(id => !ids.includes(id)));
+      setSelectedWeeks(p => p.filter(w => w !== n));
+    } else {
+      setSelectedReqs(p => [...new Set([...p, ...ids])]);
+      setSelectedWeeks(p => [...new Set([...p, n])]);
+    }
+  };
+
+  const isWeekSelected = (n) => {
+    const d = reqsByWeek.find(w => w.week === n);
+    return d ? d.reqs.every(r => selectedReqs.includes(r.id)) : false;
+  };
+
   const handlePrintOrder = () => {
+    // Normalize and consolidate ingredients
+    const normalize = (items) => {
+      const grouped = {};
+      
+      items.forEach(item => {
+        let name = item.name || '';
+        let qty = parseFloat(item.quantity) || 0;
+        let unit = (item.unit || 'ea').toLowerCase();
+        let cat = item.category || 'Other';
+        
+        // Name normalization
+        if (/clarified butter/i.test(name)) name = 'Butter, Unsalted';
+        if (/cream.*heavy.*whip/i.test(name)) name = 'Cream, Heavy';
+        if (/heavy whipping cream/i.test(name)) name = 'Cream, Heavy';
+        
+        // Unit fixes - remove invalid units like "basket"
+        if (/basket/i.test(unit)) unit = 'pt';
+        
+        // Category corrections
+        if (/evaporated milk|sweetened condensed|condensed milk/i.test(name)) cat = 'Pantry';
+        if (/cocoa/i.test(name)) cat = 'Baking';
+        
+        const key = name.toLowerCase().trim();
+        if (!grouped[key]) {
+          grouped[key] = { name, quantities: [], category: cat };
+        }
+        grouped[key].quantities.push({ qty, unit });
+        // Use most specific category
+        if (cat !== 'Other') grouped[key].category = cat;
+      });
+      
+      // Consolidate quantities
+      return Object.values(grouped).map(item => {
+        let totalQty = 0;
+        let finalUnit = 'ea';
+        const units = item.quantities.map(q => q.unit);
+        
+        // Cream/milk - convert to quarts
+        if (/cream|milk|half.*half/i.test(item.name) && !/condensed|evaporated/i.test(item.name)) {
+          item.quantities.forEach(q => {
+            if (/gal/i.test(q.unit)) totalQty += q.qty * 4;
+            else if (/qt|quart/i.test(q.unit)) totalQty += q.qty;
+            else if (/pt|pint/i.test(q.unit)) totalQty += q.qty * 0.5;
+            else if (/cup|c$/i.test(q.unit)) totalQty += q.qty * 0.25;
+            else totalQty += q.qty;
+          });
+          finalUnit = 'qt';
+        }
+        // Eggs - convert to flats (30 ea)
+        else if (/^eggs?$/i.test(item.name.trim())) {
+          item.quantities.forEach(q => {
+            if (/flat/i.test(q.unit)) totalQty += q.qty * 30;
+            else if (/dz|doz/i.test(q.unit)) totalQty += q.qty * 12;
+            else totalQty += q.qty;
+          });
+          const flats = Math.ceil(totalQty / 30);
+          const remainder = totalQty % 30;
+          finalUnit = 'flat';
+          totalQty = flats;
+          if (remainder > 0) {
+            return { name: item.name, quantity: flats + ' (' + Math.round(totalQty * 30 / flats) + ' ea)', unit: finalUnit, category: item.category };
+          }
+        }
+        // Weight - consolidate oz/lb
+        else if (units.some(u => /oz|lb/i.test(u))) {
+          item.quantities.forEach(q => {
+            if (/oz/i.test(q.unit)) totalQty += q.qty / 16;
+            else if (/lb/i.test(q.unit)) totalQty += q.qty;
+            else totalQty += q.qty;
+          });
+          finalUnit = 'lb';
+        }
+        // Volume - consolidate cups/tbsp etc
+        else if (units.some(u => /cup|tbsp|tsp/i.test(u))) {
+          item.quantities.forEach(q => {
+            if (/cup|c$/i.test(q.unit)) totalQty += q.qty;
+            else if (/tbsp/i.test(q.unit)) totalQty += q.qty / 16;
+            else if (/tsp/i.test(q.unit)) totalQty += q.qty / 48;
+            else totalQty += q.qty;
+          });
+          finalUnit = 'cup';
+        }
+        // Count items
+        else {
+          item.quantities.forEach(q => totalQty += q.qty);
+          finalUnit = units[0] || 'ea';
+        }
+        
+        return { 
+          name: item.name, 
+          quantity: Math.round(totalQty * 100) / 100, 
+          unit: finalUnit, 
+          category: item.category 
+        };
+      });
+    };
+    
+    const normalized = normalize(consolidatedItems);
+    
+    // Group by category
     const categories = {};
-    consolidatedItems.forEach(item => {
+    normalized.forEach(item => {
       const cat = item.category || "Other";
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(item);
     });
-    const catOrder = ["Produce", "Dairy \& Eggs", "Meat", "Seafood", "Pantry", "Frozen", "Bakery", "Supplies", "Other"];
+    
+    // Category order
+    const catOrder = ["Produce", "Dairy", "Protein", "Baking", "Pantry", "Spices", "Supplies", "Wine & Spirits", "Other"];
     const sorted = {};
     catOrder.forEach(cat => {
       if (categories[cat]) sorted[cat] = categories[cat].sort((a, b) => a.name.localeCompare(b.name));
     });
+    // Add any remaining categories
+    Object.keys(categories).forEach(cat => {
+      if (!sorted[cat]) sorted[cat] = categories[cat].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const weekInfo = selectedReqs.length > 0 ? 'Selected' : '';
+    
     let html = "<h1 style=\"font-family:Arial;font-size:18px;margin-bottom:8px;\">Consolidated Order</h1>";
-    html += "<p style=\"font-family:Arial;font-size:12px;margin-bottom:16px;\">Week of " + (selectedReqs[0]?.class_date || "") + " | " + selectedReqs.length + " requisitions | " + consolidatedItems.length + " items</p>";
+    html += "<p style=\"font-family:Arial;font-size:12px;margin-bottom:16px;\">" + weekInfo + " | " + selectedReqs.length + " requisitions | " + normalized.length + " items | " + today + "</p>";
     html += "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%;font-family:Arial;font-size:11px;\">";
-    html += "<thead><tr style=\"background:#f0f0f0;\"><th>✓</th><th align=\"left\">Item</th><th align=\"center\">Qty</th><th align=\"left\">Unit</th></tr></thead><tbody>";
+    html += "<thead><tr style=\"background:#f0f0f0;\"><th style=\"width:30px\">✓</th><th align=\"left\">Item</th><th align=\"center\" style=\"width:60px\">Qty</th><th align=\"left\" style=\"width:50px\">Unit</th><th align=\"center\" style=\"width:70px\">On Hand</th></tr></thead><tbody>";
     Object.entries(sorted).forEach(([category, items]) => {
-      html += "<tr><td colspan=\"4\" style=\"background:#e0e0e0;font-weight:bold;\">" + category + "</td></tr>";
+      html += "<tr><td colspan=\"5\" style=\"background:#e0e0e0;font-weight:bold;\">" + category + "</td></tr>";
       items.forEach(item => {
-        html += "<tr><td style=\"text-align:center;\">☐</td><td>" + item.name + "</td><td style=\"text-align:center;\">" + item.quantity + "</td><td>" + item.unit + "</td></tr>";
+        html += "<tr><td style=\"text-align:center;\">☐</td><td>" + item.name + "</td><td style=\"text-align:center;\">" + item.quantity + "</td><td>" + item.unit + "</td><td style=\"border:1px solid #ccc;\"></td></tr>";
       });
     });
     html += "</tbody></table>";
     const pw = window.open("", "_blank");
-    pw.document.write("<!DOCTYPE html><html><head><title>Consolidated Order</title></head><body>" + html + "</body></html>");
+    pw.document.write("<!DOCTYPE html><html><head><title>Consolidated Order</title><style>@media print { @page { margin: 0.5in; } }</style></head><body style=\"padding:20px;\">" + html + "</body></html>");
     pw.document.close();
     pw.print();
   };
@@ -333,11 +482,31 @@ export default function OrdersPage() {
               </div>
             </div>
 
+            {/* Week Selection */}
+            {reqsByWeek.length > 0 && (
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-purple-800">Select Weeks:</span>
+                  {selectedWeeks.length > 0 && <span className="text-sm text-purple-600">{selectedWeeks.length} week(s) • {selectedReqs.length} reqs</span>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {reqsByWeek.map(w => (
+                    <button key={w.week} onClick={() => toggleWeek(w.week)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium border-2 ${isWeekSelected(w.week) ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'}`}>
+                      <div>{isWeekSelected(w.week) && '✓ '}Week {w.week}</div>
+                      <div className="text-xs opacity-75">{w.label}</div>
+                      <div className="text-xs opacity-75">{w.reqs.length} reqs</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-6">
               {/* Left: Select Requisitions */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                  Approved Requisitions ({requisitions.length})
+                  Requisitions ({requisitions.length})
                 </h3>
                 
                 {loading ? (
@@ -422,21 +591,6 @@ export default function OrdersPage() {
                       </table>
                     </div>
                     
-                    {/* Actions */}
-                    <div className="flex items-center gap-3 mt-4">
-                      <button
-                        onClick={handleSaveOrder}
-                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
-                      >
-                        Save Draft
-                      </button>
-                      <button
-                        onClick={handleSendOrder}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                      >
-                        Send Order →
-                      </button>
-                    </div>
                   </>
                 )}
               </div>

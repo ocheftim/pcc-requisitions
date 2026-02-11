@@ -1,379 +1,285 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  FileText, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle, 
-  Package,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  DollarSign
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
-const Dashboard = () => {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 23)); // January 23, 2026
-  
-  // Sample data - replace with your actual data source
-  const requisitions = [
-    { id: 1, class_code: 'CUL244', instructor: 'Mikesell', status: 'pending', needed_date: '2026-01-26', items: 12, total: 145.50 },
-    { id: 2, class_code: 'CUL130', instructor: 'Wong', status: 'submitted', needed_date: '2026-01-27', items: 8, total: 89.25 },
-    { id: 3, class_code: 'CUL260', instructor: 'Mikesell', status: 'pending', needed_date: '2026-01-28', items: 15, total: 210.00 },
-    { id: 4, class_code: 'CUL160', instructor: 'Moreno', status: 'pending', needed_date: '2026-01-29', items: 10, total: 125.75 },
-    { id: 5, class_code: 'CUL244', instructor: 'Mikesell', status: 'pending', needed_date: '2026-02-02', items: 14, total: 175.00 },
-    { id: 6, class_code: 'CUL130', instructor: 'Wong', status: 'pending', needed_date: '2026-02-03', items: 9, total: 98.50 },
-    // Add more as needed
-  ];
+const CATERING_EVENTS = [
+  { id: 'cat-1', name: "Chancellor's Cabinet Dinner", date: '2025-12-10', guests: 15, location: "Marci's Home", status: 'completed', amount: null, foap: null, paidDate: 'Dec 2025', paidMethod: 'check' },
+  { id: 'cat-2', name: 'VP Soto Campus Welcome Lunch', date: '2026-01-14', guests: 100, location: 'Desert Vista Cafeteria', status: 'completed', amount: 1027, foap: '132000 | DVINPT | 54403 | 8FDSVC', paidDate: 'Jan 15, 2026' },
+  { id: 'cat-3', name: 'Hispanic Chamber Reception', date: '2026-01-21', guests: 125, location: 'Tucson Convention Center', status: 'completed', amount: 1217.25, foap: '132000 | DVINPT | 54403 | 8FDSVC', invoiceStatus: 'pending' },
+  { id: 'cat-4', name: 'Spring Fest 2025', date: '2026-02-21', guests: 500, location: 'Desert Vista Campus', status: 'confirmed', amount: null, foap: null },
+  { id: 'cat-5', name: 'Retirement - Michelle Nieuwenhuis', date: '2026-03-03', guests: 150, location: 'Downtown - Azurite Room', status: 'pending' },
+  { id: 'cat-6', name: "Donor's Reception", date: '2026-03-10', guests: 150, location: 'Downtown - Azurite Room', status: 'pending' },
+  { id: 'cat-7', name: 'Retirement - Gabriela De Echavarri', date: '2026-03-12', guests: 100, location: 'West Campus - Saguaro Room', status: 'pending' },
+];
 
-  const classSchedule = [
-    { code: 'CUL244', day: 'Monday', color: 'bg-amber-100 text-amber-800' },
-    { code: 'CUL130', day: 'Tuesday', color: 'bg-blue-100 text-blue-800' },
-    { code: 'CUL260', day: 'Wednesday', color: 'bg-amber-100 text-amber-800' },
-    { code: 'CUL160', day: 'Thursday', color: 'bg-blue-100 text-blue-800' },
-  ];
+const COURSE_STUDENT_COUNTS = { '260': 12, '244': 13, '130': 7, '160': 12 };
 
-  // Calculate stats
-  const stats = useMemo(() => {
-    const today = new Date(2026, 0, 23);
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay());
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-
-    const pending = requisitions.filter(r => r.status === 'pending' || r.status === 'submitted');
-    const totalItems = pending.reduce((sum, r) => sum + r.items, 0);
-    
-    // Due this week (needed_date falls within current week)
-    const dueThisWeek = pending.filter(r => {
-      const needed = new Date(r.needed_date);
-      return needed >= weekStart && needed <= weekEnd;
-    });
-
-    // Overdue (needed_date is before today and not processed)
-    const overdue = pending.filter(r => {
-      const needed = new Date(r.needed_date);
-      return needed < today;
-    });
-
-    // Processed this week (would come from your actual processed data)
-    const processedThisWeek = 0; // Replace with actual count
-
-    const totalValue = pending.reduce((sum, r) => sum + r.total, 0);
-
-    return {
-      pendingReview: pending.length,
-      dueThisWeek: dueThisWeek.length,
-      overdue: overdue.length,
-      processedThisWeek,
-      totalItems,
-      totalValue,
-      classesThisWeek: 4
-    };
-  }, [requisitions]);
-
-  // Calendar logic
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDay = firstDay.getDay();
-    
-    const days = [];
-    // Empty cells for days before month starts
-    for (let i = 0; i < startingDay; i++) {
-      days.push(null);
-    }
-    // Days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    return days;
-  };
-
-  const getClassesForDay = (day) => {
-    if (!day) return [];
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    const dayOfWeek = date.getDay();
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return classSchedule.filter(c => c.day === dayNames[dayOfWeek]);
-  };
-
-  const navigateMonth = (direction) => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() + direction);
-      return newDate;
-    });
-  };
-
-  const isToday = (day) => {
-    if (!day) return false;
-    const today = new Date(2026, 0, 23);
-    return day === today.getDate() && 
-           currentDate.getMonth() === today.getMonth() && 
-           currentDate.getFullYear() === today.getFullYear();
-  };
-
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  };
-
-  const upcomingRequisitions = requisitions
-    .filter(r => r.status === 'pending' || r.status === 'submitted')
-    .sort((a, b) => new Date(a.needed_date) - new Date(b.needed_date))
-    .slice(0, 6);
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gray-800 text-white px-6 py-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">ToqueWorks</h1>
-            <p className="text-gray-300 text-sm">Lab Requisition Management</p>
-          </div>
-          <div className="text-right text-gray-300">
-            {formatDate(new Date(2026, 0, 23))}
-          </div>
-        </div>
-      </header>
-
-      <main className="p-6">
-        {/* Stat Cards - Primary Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          {/* Pending Review */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="p-2 bg-amber-50 rounded-lg">
-                <FileText className="w-5 h-5 text-amber-600" />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-3xl font-bold text-gray-900">{stats.pendingReview}</p>
-              <p className="text-sm text-gray-500 uppercase tracking-wide">Pending Review</p>
-            </div>
-          </div>
-
-          {/* Due This Week */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Clock className="w-5 h-5 text-blue-600" />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-3xl font-bold text-gray-900">{stats.dueThisWeek}</p>
-              <p className="text-sm text-gray-500 uppercase tracking-wide">Due This Week</p>
-            </div>
-          </div>
-
-          {/* Overdue */}
-          <div className={`rounded-xl p-5 shadow-sm border ${stats.overdue > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-start justify-between">
-              <div className={`p-2 rounded-lg ${stats.overdue > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
-                <AlertTriangle className={`w-5 h-5 ${stats.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className={`text-3xl font-bold ${stats.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{stats.overdue}</p>
-              <p className={`text-sm uppercase tracking-wide ${stats.overdue > 0 ? 'text-red-600' : 'text-gray-500'}`}>Overdue</p>
-            </div>
-          </div>
-
-          {/* Processed This Week */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="p-2 bg-green-50 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-3xl font-bold text-gray-900">{stats.processedThisWeek}</p>
-              <p className="text-sm text-gray-500 uppercase tracking-wide">Processed This Week</p>
-            </div>
-          </div>
-
-          {/* Total Items */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <Package className="w-5 h-5 text-purple-600" />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-3xl font-bold text-gray-900">{stats.totalItems}</p>
-              <p className="text-sm text-gray-500 uppercase tracking-wide">Total Items</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Secondary Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Classes This Week */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 rounded-lg">
-              <Calendar className="w-6 h-6 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{stats.classesThisWeek}</p>
-              <p className="text-sm text-gray-500">Classes This Week</p>
-            </div>
-          </div>
-
-          {/* Total Requisitions Value */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200 flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 rounded-lg">
-              <DollarSign className="w-6 h-6 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">${stats.totalValue.toFixed(2)}</p>
-              <p className="text-sm text-gray-500">Total Pending Value</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between px-6 py-4 bg-gray-800 rounded-t-xl">
-              <button 
-                onClick={() => navigateMonth(-1)}
-                className="p-1 hover:bg-gray-700 rounded text-white"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <h2 className="text-lg font-semibold text-white">
-                {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </h2>
-              <button 
-                onClick={() => navigateMonth(1)}
-                className="p-1 hover:bg-gray-700 rounded text-white"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-4">
-              {/* Day Headers */}
-              <div className="grid grid-cols-7 mb-2">
-                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
-                  <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
-                    {day}
-                  </div>
-                ))}
-              </div>
-              
-              {/* Calendar Grid */}
-              <div className="grid grid-cols-7 gap-1">
-                {getDaysInMonth(currentDate).map((day, index) => (
-                  <div 
-                    key={index} 
-                    className={`min-h-[80px] p-1 border border-gray-100 rounded ${
-                      day ? 'bg-white' : 'bg-gray-50'
-                    }`}
-                  >
-                    {day && (
-                      <>
-                        <span className={`text-sm font-medium ${
-                          isToday(day) 
-                            ? 'bg-amber-500 text-white w-6 h-6 rounded-full flex items-center justify-center' 
-                            : 'text-gray-700'
-                        }`}>
-                          {day}
-                        </span>
-                        <div className="mt-1 space-y-1">
-                          {getClassesForDay(day).map((cls, i) => (
-                            <div 
-                              key={i}
-                              className={`text-xs px-1 py-0.5 rounded truncate ${cls.color}`}
-                            >
-                              {cls.code}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Legend */}
-              <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-amber-100 rounded"></div>
-                  <span className="text-xs text-gray-600">Classes</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-100 rounded"></div>
-                  <span className="text-xs text-gray-600">Catering Events</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <h3 className="font-semibold text-gray-800 mb-4">QUICK ACTIONS</h3>
-              <div className="space-y-2">
-                <button className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors">
-                  Review Consolidated Orders
-                </button>
-                <button className="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-medium border border-gray-200 transition-colors">
-                  View All Requisitions
-                </button>
-                <button className="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-medium border border-gray-200 transition-colors">
-                  Manage Ingredients
-                </button>
-                <button className="w-full py-2.5 px-4 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-medium border border-gray-200 transition-colors">
-                  Catering Events
-                </button>
-              </div>
-            </div>
-
-            {/* Upcoming */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-800">UPCOMING</h3>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {upcomingRequisitions.map(req => (
-                  <div key={req.id} className="px-5 py-3 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-800">{req.class_code} - {req.instructor}</p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(req.needed_date).toLocaleDateString('en-US', { 
-                          weekday: 'short', 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
-                      </p>
-                    </div>
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                      req.status === 'pending' 
-                        ? 'bg-amber-100 text-amber-700' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {req.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+const getStudentCount = (courseName) => {
+  if (!courseName) return 0;
+  const nums = courseName.match(/\d{3}/);
+  return nums && COURSE_STUDENT_COUNTS[nums[0]] ? COURSE_STUDENT_COUNTS[nums[0]] : 0;
 };
 
-export default Dashboard;
+export default function DashboardPage() {
+  const [requisitions, setRequisitions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data, error } = await supabase
+          .from('requisitions')
+          .select('*')
+          .order('class_date', { ascending: true });
+        if (!error && data) setRequisitions(data);
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
+    }
+    load();
+  }, []);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
+
+  const upcomingReqs = useMemo(() => {
+    const twoWeeks = new Date(today);
+    twoWeeks.setDate(twoWeeks.getDate() + 14);
+    return requisitions.filter(r => {
+      const d = new Date(r.class_date + 'T00:00:00');
+      return d >= today && d <= twoWeeks;
+    }).sort((a, b) => new Date(a.class_date) - new Date(b.class_date));
+  }, [requisitions, todayStr]);
+
+  const upcomingCatering = useMemo(() => {
+    return CATERING_EVENTS.filter(e => e.status !== 'completed')
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, []);
+
+  const completedCatering = useMemo(() => {
+    return CATERING_EVENTS.filter(e => e.status === 'completed')
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, []);
+
+  const stats = useMemo(() => {
+    const thisWeekEnd = new Date(today);
+    thisWeekEnd.setDate(thisWeekEnd.getDate() + 7);
+    const thisWeekReqs = requisitions.filter(r => {
+      const d = new Date(r.class_date + 'T00:00:00');
+      return d >= today && d <= thisWeekEnd;
+    });
+    const confirmedEvents = CATERING_EVENTS.filter(e => e.status === 'confirmed' || e.status === 'pending');
+    const totalCateringGuests = confirmedEvents.reduce((sum, e) => sum + e.guests, 0);
+    return {
+      thisWeekClasses: thisWeekReqs.length,
+      upcomingEvents: confirmedEvents.length,
+      totalCateringGuests,
+      completedEvents: CATERING_EVENTS.filter(e => e.status === 'completed').length
+    };
+  }, [requisitions, todayStr]);
+
+  const formatDate = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  const getDaysUntil = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setHours(0, 0, 0, 0);
+    const diffTime = d.getTime() - today.getTime();
+    const diff = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    if (diff === 0) return { text: 'Today', urgent: true };
+    if (diff === 1) return { text: 'Tomorrow', urgent: true };
+    if (diff < 0) return { text: `${Math.abs(diff)}d ago`, past: true };
+    return { text: `${diff} days`, urgent: diff <= 7 };
+  };
+
+  if (loading) {
+    return <div className="p-6"><div className="animate-pulse text-gray-500">Loading dashboard...</div></div>;
+  }
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-slate-800">Operations Dashboard</h1>
+        <p className="text-slate-500 text-sm">{today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+          <div className="text-2xl font-semibold text-slate-700">{stats.thisWeekClasses}</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Classes This Week</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+          <div className="text-2xl font-semibold text-slate-700">{stats.upcomingEvents}</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Upcoming Events</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+          <div className="text-2xl font-semibold text-slate-700">{stats.totalCateringGuests.toLocaleString()}</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Total Guests</div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+          <div className="text-2xl font-semibold text-slate-700">{stats.completedEvents}</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Events Completed</div>
+        </div>
+      </div>
+
+      {/* Spring Fest Banner */}
+      {(() => {
+        const springFest = CATERING_EVENTS.find(e => e.name === 'Spring Fest 2025');
+        if (!springFest) return null;
+        const days = getDaysUntil(springFest.date);
+        if (days.past || parseInt(days.text) > 60) return null;
+        const daysNum = days.text === 'Today' ? 0 : days.text === 'Tomorrow' ? 1 : parseInt(days.text);
+        return (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-blue-600 uppercase tracking-wide font-medium mb-1">Featured Event</div>
+                <h2 className="text-lg font-semibold text-slate-800">Spring Fest 2025</h2>
+                <p className="text-sm text-slate-600">February 21 · 500 guests · Desert Vista Campus</p>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-semibold text-blue-600">{daysNum}</div>
+                <div className="text-xs text-slate-500">days</div>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-6 text-sm">
+              <div className="text-slate-600"><span className="text-slate-500">Sysco:</span> <span className="font-medium">Request Sent</span></div>
+              <div className="text-slate-600"><span className="text-slate-500">Menu:</span> <span className="font-medium">Confirmed</span></div>
+              <div className="text-slate-600"><span className="text-slate-500">Production:</span> <span className="font-medium">In Progress</span></div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Catering Events */}
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-700">Catering Events</h2>
+          </div>
+          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+            {upcomingCatering.map(event => {
+              const days = getDaysUntil(event.date);
+              return (
+                <div key={event.id} className="p-4 hover:bg-slate-50">
+                  <div className="flex justify-between items-start mb-1">
+                    <div className="font-medium text-slate-800">{event.name}</div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      event.status === 'confirmed' 
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
+                      {event.status === 'confirmed' ? 'Confirmed' : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="text-slate-500">
+                      {formatDate(event.date)} · {event.guests} guests
+                    </div>
+                    <span className={`text-sm ${days.urgent ? 'font-medium text-amber-600' : 'text-slate-400'}`}>
+                      {days.text}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{event.location}</div>
+                </div>
+              );
+            })}
+          </div>
+          {completedCatering.length > 0 && (
+            <div className="border-t border-slate-200 px-4 py-2 bg-slate-50">
+              <details className="text-sm">
+                <summary className="text-slate-500 cursor-pointer hover:text-slate-700">
+                  {completedCatering.length} completed events
+                </summary>
+                <div className="mt-2 space-y-3">
+                  {completedCatering.map(event => (
+                    <div key={event.id} className="text-xs border-l-2 border-slate-200 pl-3">
+                      <div className="font-medium text-slate-600">{event.name}</div>
+                      <div className="text-slate-400">{formatDate(event.date)} · {event.guests} guests</div>
+                      {event.amount && (
+                        <div className="text-slate-500 mt-1">
+                          ${event.amount.toLocaleString()} 
+                          {event.paidDate ? (
+                            <span className="text-emerald-600 ml-2">✓ Paid {event.paidDate}</span>
+                          ) : event.invoiceStatus === 'pending' ? (
+                            <span className="text-amber-600 ml-2">⏳ Invoice pending</span>
+                          ) : null}
+                        </div>
+                      )}
+                      {!event.amount && event.paidDate && (
+                        <div className="text-emerald-600 mt-1">✓ Paid ({event.paidMethod || 'processed'})</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+
+        {/* Upcoming Classes */}
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <h2 className="font-semibold text-slate-700">Upcoming Classes</h2>
+            <Link to="/pull-list" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+              Pull Lists →
+            </Link>
+          </div>
+          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+            {upcomingReqs.length === 0 ? (
+              <div className="p-4 text-slate-500 text-sm">No classes scheduled in the next 2 weeks</div>
+            ) : (
+              upcomingReqs.map(req => {
+                const studentCount = getStudentCount(req.course);
+                const days = getDaysUntil(req.class_date);
+                return (
+                  <div key={req.id} className={`p-4 hover:bg-slate-50 ${days.past ? 'opacity-50' : ''}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <div>
+                        <span className="font-medium text-slate-800">{req.course}</span>
+                        <span className="text-slate-500 ml-2 text-sm">- {req.week || 'No topic'}</span>
+                      </div>
+                      {studentCount > 0 && (
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                          {studentCount} students
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <div className="text-slate-500">
+                        {formatDate(req.class_date)}
+                        {req.instructor && <span className="ml-2">· {req.instructor}</span>}
+                      </div>
+                      <span className={`text-sm ${days.past ? 'text-slate-400' : days.urgent ? 'font-medium text-amber-600' : 'text-slate-400'}`}>
+                        {days.text}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mt-6 bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <h2 className="font-semibold text-slate-700 mb-3">Quick Actions</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link to="/requisitions" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+            View Requisitions
+          </Link>
+          <Link to="/pull-list" className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium">
+            Generate Pull List
+          </Link>
+          <Link to="/consolidated" className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium">
+            Consolidated Orders
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -235,7 +235,7 @@ const getWeekRange = (date) => {
 // ===========================================
 // MULTI-SELECT DROPDOWN COMPONENT
 // ===========================================
-const MultiSelectDropdown = ({ label, options, selected, onChange, countSuffix = '' }) => {
+const MultiSelectDropdown = ({ label, options, selected, onChange, countSuffix = '', renderOption = null }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -303,7 +303,7 @@ const MultiSelectDropdown = ({ label, options, selected, onChange, countSuffix =
                   onChange={() => toggleOption(option)}
                   className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                 />
-                <span className="text-sm flex-1">{option}</span>
+                <span className="text-sm flex-1">{renderOption ? renderOption(option) : option}</span>
               </label>
             ))}
           </div>
@@ -324,7 +324,7 @@ export default function ConsolidatedOrderingPage() {
   const [selectedArchive, setSelectedArchive] = useState(null);
   
   // Filter states - CHANGED to arrays for multi-select
-  const [filterWeek, setFilterWeek] = useState(null);
+  const [filterWeeks, setFilterWeeks] = useState([]); // Multi-week selection
   const [filterInstructors, setFilterInstructors] = useState([]); // Changed from single to array
   const [filterCourses, setFilterCourses] = useState([]); // Changed from single to array
   const [filterItemType, setFilterItemType] = useState('all');
@@ -835,39 +835,37 @@ export default function ConsolidatedOrderingPage() {
   }, [requisitions]);
 
   useEffect(() => {
-    if (filterWeek === null && filterOptions.weeks.length > 0) {
+    if (filterWeeks.length === 0 && filterOptions.weeks.length > 0) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
       const upcomingWeek = filterOptions.weeks.find(w => w.start >= today);
       
       if (upcomingWeek) {
-        setFilterWeek(upcomingWeek.key);
-      } else {
-        setFilterWeek(filterOptions.weeks[filterOptions.weeks.length - 1]?.key || 'all');
+        setFilterWeeks([upcomingWeek.key]); // Default to upcoming week
       }
     }
-  }, [filterOptions.weeks, filterWeek]);
+  }, [filterOptions.weeks, filterWeeks.length]);
 
-  // UPDATED: Filter requisitions based on multi-select
+  // UPDATED: Filter requisitions based on multi-select (including weeks)
   const filteredRequisitions = useMemo(() => {
     return requisitions.filter(req => {
-      // Week filter
-      if (filterWeek && filterWeek !== "all" && req.class_date) {
+      // Week filter - NOW MULTI-SELECT
+      if (filterWeeks.length > 0 && req.class_date) {
         const { start } = getWeekRange(req.class_date);
         const reqWeekKey = start.toISOString().split("T")[0];
-        if (reqWeekKey !== filterWeek) return false;
+        if (!filterWeeks.includes(reqWeekKey)) return false;
       }
       
-      // Instructor filter - NOW MULTI-SELECT
+      // Instructor filter - MULTI-SELECT
       if (filterInstructors.length > 0 && !filterInstructors.includes(req.instructor)) return false;
       
-      // Course filter - NOW MULTI-SELECT
+      // Course filter - MULTI-SELECT
       if (filterCourses.length > 0 && !filterCourses.includes(req.course)) return false;
       
       return true;
     });
-  }, [requisitions, filterWeek, filterInstructors, filterCourses]);
+  }, [requisitions, filterWeeks, filterInstructors, filterCourses]);
 
   const ingMap = useMemo(() => {
     const map = {};
@@ -981,7 +979,7 @@ export default function ConsolidatedOrderingPage() {
       id: Date.now(),
       date: new Date().toISOString(),
       orders: consolidateByVendor,
-      filters: { week: filterWeek, instructors: filterInstructors, courses: filterCourses, itemType: filterItemType },
+      filters: { weeks: filterWeeks, instructors: filterInstructors, courses: filterCourses, itemType: filterItemType },
       requisitionIds: filteredRequisitions.map(r => r.id),
       summary: {
         vendors: Object.keys(consolidateByVendor).length,
@@ -1007,7 +1005,7 @@ export default function ConsolidatedOrderingPage() {
     const printWindow = window.open('', '_blank');
     const date = new Date().toLocaleDateString();
     const filterInfo = [
-      filterWeek !== 'all' ? `Week: ${filterWeek}` : '',
+      filterWeeks.length > 0 ? `Weeks: ${filterWeeks.length}` : '',
       filterInstructors.length > 0 ? `Instructors: ${filterInstructors.join(', ')}` : '',
       filterCourses.length > 0 ? `Courses: ${filterCourses.join(', ')}` : '',
       filterItemType !== 'all' ? `Type: ${filterItemType}` : ''
@@ -1214,7 +1212,7 @@ export default function ConsolidatedOrderingPage() {
         <div class="header-info">
           <p><strong>Instructor:</strong> ${conf.instructor}</p>
           <p><strong>Generated:</strong> ${date}</p>
-          <p><strong>Order Period:</strong> ${filterWeek || 'All Periods'}</p>
+          <p><strong>Order Period:</strong> ${filterWeeks.length > 0 ? filterWeeks.length + ' week(s)' : 'All Periods'}</p>
         </div>
         
         ${processedReqs.map(req => `
@@ -1327,7 +1325,7 @@ export default function ConsolidatedOrderingPage() {
     const subject = encodeURIComponent(`Order Confirmation - ${filterWeek || 'Upcoming'}`);
     const body = encodeURIComponent(
       `Hi ${conf.instructor},\n\n` +
-      `This is your order confirmation for ${filterWeek || 'the upcoming week'}.\n\n` +
+      `This is your order confirmation for ${filterWeeks.length > 0 ? 'the selected weeks' : 'the upcoming week'}.\n\n` +
       `${classDetails}\n\n` +
       `Please review and let me know if you have any questions.\n\n` +
       `Best regards,\nProgram Manager`
@@ -1338,7 +1336,7 @@ export default function ConsolidatedOrderingPage() {
   };
 
   const clearFilters = () => {
-    setFilterWeek('all');
+    setFilterWeeks([]);
     setFilterInstructors([]);
     setFilterCourses([]);
     setFilterItemType('all');
@@ -1350,7 +1348,7 @@ export default function ConsolidatedOrderingPage() {
   const displayOrders = selectedArchive ? selectedArchive.orders : consolidateByVendor;
   const displayVendors = Object.keys(displayOrders).sort();
   
-  const hasActiveFilters = (filterWeek && filterWeek !== 'all') || filterInstructors.length > 0 || filterCourses.length > 0 || filterItemType !== 'all' || showGroceryOnly;
+  const hasActiveFilters = filterWeeks.length > 0 || filterInstructors.length > 0 || filterCourses.length > 0 || filterItemType !== 'all' || showGroceryOnly;
 
   if (loading) return <div className="p-6 flex items-center justify-center"><div className="text-gray-500">Loading orders...</div></div>;
 
@@ -1394,11 +1392,17 @@ export default function ConsolidatedOrderingPage() {
             <div className="flex flex-wrap gap-3 items-center">
               <label className="text-sm font-medium text-gray-600">Filters:</label>
               
-              {/* Order Period Filter */}
-              <select value={filterWeek || 'all'} onChange={(e) => setFilterWeek(e.target.value)} className="px-3 py-2 border rounded-lg text-sm font-medium">
-                <option value="all">All Order Periods</option>
-                {filterOptions.weeks.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
-              </select>
+              {/* Order Period Filter - MULTI-SELECT */}
+              <MultiSelectDropdown
+                label="Weeks"
+                options={filterOptions.weeks.map(w => w.key)}
+                selected={filterWeeks}
+                onChange={setFilterWeeks}
+                renderOption={(key) => {
+                  const week = filterOptions.weeks.find(w => w.key === key);
+                  return week ? `Week ${week.week}: ${week.label}` : key;
+                }}
+              />
               
               {/* Instructor Multi-Select */}
               <MultiSelectDropdown
@@ -1443,8 +1447,17 @@ export default function ConsolidatedOrderingPage() {
             </div>
             
             {/* Active Filter Badges */}
-            {(filterInstructors.length > 0 || filterCourses.length > 0) && (
+            {(filterWeeks.length > 0 || filterInstructors.length > 0 || filterCourses.length > 0) && (
               <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t">
+                {filterWeeks.map(weekKey => {
+                  const week = filterOptions.weeks.find(w => w.key === weekKey);
+                  return (
+                    <span key={weekKey} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
+                      {week ? `Wk ${week.week}: ${week.label}` : weekKey}
+                      <button onClick={() => setFilterWeeks(filterWeeks.filter(w => w !== weekKey))} className="hover:text-purple-900 ml-1">×</button>
+                    </span>
+                  );
+                })}
                 {filterInstructors.map(inst => (
                   <span key={inst} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
                     {inst}
@@ -1535,10 +1548,10 @@ export default function ConsolidatedOrderingPage() {
                       </div>
                       <div className="text-sm text-gray-600 mt-1">
                         {archive.summary.vendors} vendors • {archive.summary.totalItems} items • ${archive.summary.totalValue.toFixed(2)} est.
-                        {archive.filters && (archive.filters.week !== 'all' || (archive.filters.courses && archive.filters.courses.length > 0)) && (
+                        {archive.filters && ((archive.filters.weeks && archive.filters.weeks.length > 0) || (archive.filters.courses && archive.filters.courses.length > 0)) && (
                           <span className="ml-2 text-blue-600">
                             {[
-                              archive.filters.week !== 'all' ? archive.filters.week : '',
+                              archive.filters.weeks?.length > 0 ? `${archive.filters.weeks.length} week(s)` : '',
                               archive.filters.courses?.length > 0 ? archive.filters.courses.join(', ') : ''
                             ].filter(Boolean).join(' • ')}
                           </span>
@@ -1941,7 +1954,7 @@ export default function ConsolidatedOrderingPage() {
               <div className="bg-green-600 text-white px-6 py-4 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold">📋 Order Confirmations</h2>
-                  <p className="text-sm text-green-100">{filterWeek && filterWeek !== 'all' ? filterWeek : 'All Weeks'} • {filteredRequisitions.length} requisitions</p>
+                  <p className="text-sm text-green-100">{filterWeeks.length > 0 ? `${filterWeeks.length} week(s) selected` : 'All Weeks'} • {filteredRequisitions.length} requisitions</p>
                 </div>
                 <button onClick={() => setShowConfirmations(false)} className="text-white hover:text-green-200 text-2xl">&times;</button>
               </div>

@@ -21,18 +21,29 @@ const CheckIcon = () => (
   </svg>
 );
 
-// Category colors
+// Category colors — expanded for catering items
 const categoryColors = {
   'Produce': { bg: 'bg-green-100', border: 'border-green-300', text: 'text-green-800', header: 'bg-green-600' },
   'Dairy': { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-800', header: 'bg-yellow-600' },
+  'Dairy & Eggs': { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-800', header: 'bg-yellow-600' },
   'Meat & Seafood': { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', header: 'bg-red-600' },
   'Frozen': { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800', header: 'bg-blue-600' },
   'Pantry': { bg: 'bg-amber-100', border: 'border-amber-300', text: 'text-amber-800', header: 'bg-amber-600' },
   'Bakery': { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-800', header: 'bg-orange-600' },
   'Beverages': { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-800', header: 'bg-purple-600' },
+  'Charcuterie': { bg: 'bg-rose-100', border: 'border-rose-300', text: 'text-rose-800', header: 'bg-rose-700' },
+  'Cheese': { bg: 'bg-amber-100', border: 'border-amber-300', text: 'text-amber-800', header: 'bg-amber-700' },
+  'Accompaniment': { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-800', header: 'bg-emerald-700' },
+  'Garnish': { bg: 'bg-lime-100', border: 'border-lime-300', text: 'text-lime-800', header: 'bg-lime-700' },
+  'Protein': { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', header: 'bg-red-700' },
+  'Other': { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800', header: 'bg-gray-600' },
 };
 
-const categoryOrder = ['Produce', 'Dairy', 'Meat & Seafood', 'Frozen', 'Pantry', 'Bakery', 'Beverages'];
+const categoryOrder = [
+  'Charcuterie', 'Cheese', 'Protein', 'Meat & Seafood',
+  'Produce', 'Dairy', 'Dairy & Eggs', 'Frozen',
+  'Accompaniment', 'Pantry', 'Bakery', 'Beverages', 'Garnish', 'Other'
+];
 
 // Default prep tasks by day
 const defaultPrepTasks = {
@@ -84,7 +95,6 @@ export default function CateringEventDetail() {
   const loadEvent = async () => {
     setLoading(true);
     try {
-      // Load event
       const { data: eventData, error: eventError } = await supabase
         .from('catering_events')
         .select('*')
@@ -94,7 +104,6 @@ export default function CateringEventDetail() {
       if (eventError) throw eventError;
       setEvent(eventData);
 
-      // Load linked recipes
       if (eventData.recipe_ids && eventData.recipe_ids.length > 0) {
         const { data: recipeData } = await supabase
           .from('recipes')
@@ -103,30 +112,22 @@ export default function CateringEventDetail() {
         setRecipes(recipeData || []);
       }
 
-      // Load ingredients for pricing
       const { data: ingData } = await supabase
         .from('ingredients')
         .select('name, category, vendor, pack_size, case_price, unit_price, unit');
       setIngredients(ingData || []);
 
-      // Load prep tasks from event or use defaults
       if (eventData.prep_tasks) {
         setPrepTasks(eventData.prep_tasks);
-      } else {
-        setPrepTasks(defaultPrepTasks);
-      }
-
-      // Load completed tasks from prep_tasks in database
-      if (eventData.prep_tasks) {
         const completed = {};
         Object.entries(eventData.prep_tasks).forEach(([day, tasks]) => {
           tasks.forEach((task, idx) => {
-            if (task.done) {
-              completed[`${day}-${idx}`] = true;
-            }
+            if (task.done) completed[`${day}-${idx}`] = true;
           });
         });
         setCompletedTasks(completed);
+      } else {
+        setPrepTasks(defaultPrepTasks);
       }
 
     } catch (error) {
@@ -144,81 +145,55 @@ export default function CateringEventDetail() {
     return map;
   }, [ingredients]);
 
-  // Consolidate shopping list from all recipes
-  const shoppingList = useMemo(() => {
-    const consolidated = {};
-    
-    recipes.forEach(recipe => {
-      const recipeIngs = typeof recipe.ingredients === 'string' 
-        ? JSON.parse(recipe.ingredients) 
-        : recipe.ingredients || [];
-      
-      recipeIngs.forEach(item => {
-        const key = item.name?.toLowerCase();
-        const ingInfo = ingMap[key] || {};
-        const category = ingInfo.category || 'Other';
-        
-        if (!consolidated[category]) {
-          consolidated[category] = {};
-        }
-        
-        if (!consolidated[category][item.name]) {
-          consolidated[category][item.name] = {
-            name: item.name,
-            quantity: 0,
-            unit: item.unit,
-            vendor: ingInfo.vendor || 'Unassigned',
-            packSize: ingInfo.pack_size || '',
-            casePrice: ingInfo.case_price || 0,
-            unitPrice: ingInfo.unit_price || 0,
-            sources: []
-          };
-        }
-        
-        consolidated[category][item.name].quantity += parseFloat(item.quantity) || 0;
-        consolidated[category][item.name].sources.push(recipe.name);
-      });
-    });
-    
-    return consolidated;
-  }, [recipes, ingMap]);
+  // Parse event items from JSONB
+  const eventItems = useMemo(() => {
+    if (!event?.items) return [];
+    try {
+      return typeof event.items === 'string' ? JSON.parse(event.items) : event.items;
+    } catch {
+      return [];
+    }
+  }, [event]);
 
-  // Helper to parse pack size (e.g., "6/5 lb" = 30 lb, "25 lb" = 25, "12 ct" = 12)
+  // Calculate direct items cost (from items JSONB with unit_cost)
+  const directItemsCost = useMemo(() => {
+    return eventItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const cost = parseFloat(item.unit_cost) || 0;
+      return sum + (qty * cost);
+    }, 0);
+  }, [eventItems]);
+
+  // Group direct items by category for shopping list
+  const directItemsByCategory = useMemo(() => {
+    const grouped = {};
+    eventItems.forEach(item => {
+      const category = item.category || 'Other';
+      if (!grouped[category]) grouped[category] = [];
+      grouped[category].push(item);
+    });
+    return grouped;
+  }, [eventItems]);
+
+  // Helper to parse pack size
   const parsePackSize = (packSize) => {
     if (!packSize) return { qty: 1, unit: 'each' };
     const str = packSize.toLowerCase().trim();
-    
-    // Pattern: "6/5 lb" or "6/5lb" = 6 units of 5 lb = 30 lb total
     const slashMatch = str.match(/(\d+)\s*\/\s*(\d+\.?\d*)\s*(lb|oz|ct|each|gal|qt|pt)?/);
     if (slashMatch) {
-      const count = parseFloat(slashMatch[1]);
-      const size = parseFloat(slashMatch[2]);
-      const unit = slashMatch[3] || 'each';
-      return { qty: count * size, unit };
+      return { qty: parseFloat(slashMatch[1]) * parseFloat(slashMatch[2]), unit: slashMatch[3] || 'each' };
     }
-    
-    // Pattern: "25 lb" or "12 ct" or "25LB"
     const simpleMatch = str.match(/(\d+\.?\d*)\s*(lb|oz|ct|each|gal|qt|pt|bunch)?/);
-    if (simpleMatch) {
-      return { qty: parseFloat(simpleMatch[1]), unit: simpleMatch[2] || 'each' };
-    }
-    
+    if (simpleMatch) return { qty: parseFloat(simpleMatch[1]), unit: simpleMatch[2] || 'each' };
     return { qty: 1, unit: 'each' };
   };
 
-  // Convert recipe quantity to pack size units
   const convertToPackUnits = (qty, recipeUnit, packUnit) => {
     const ru = (recipeUnit || 'each').toLowerCase();
     const pu = (packUnit || 'each').toLowerCase();
-    
-    // Same units - no conversion needed
     if (ru === pu) return qty;
-    
-    // Weight conversions
     if (ru === 'oz' && pu === 'lb') return qty / 16;
     if (ru === 'lb' && pu === 'oz') return qty * 16;
-    
-    // Volume conversions
     if (ru === 'qt' && pu === 'gal') return qty / 4;
     if (ru === 'gal' && pu === 'qt') return qty * 4;
     if (ru === 'pt' && pu === 'qt') return qty / 2;
@@ -228,103 +203,109 @@ export default function CateringEventDetail() {
     if (ru === 'cup' && pu === 'gal') return qty / 16;
     if (ru === 'tbsp' && pu === 'oz') return qty / 2;
     if (ru === 'tbsp' && pu === 'lb') return qty / 32;
-    
-    // Count-based - treat as 1:1 if can't convert
     if (pu === 'ct' || pu === 'each') return qty;
-    
-    // Default: return original qty (best effort)
     return qty;
   };
+
+  // Consolidate shopping list from recipes (existing behavior)
+  const recipeShoppingList = useMemo(() => {
+    const consolidated = {};
+    recipes.forEach(recipe => {
+      const recipeIngs = typeof recipe.ingredients === 'string'
+        ? JSON.parse(recipe.ingredients)
+        : recipe.ingredients || [];
+      recipeIngs.forEach(item => {
+        const key = item.name?.toLowerCase();
+        const ingInfo = ingMap[key] || {};
+        const category = ingInfo.category || 'Other';
+        if (!consolidated[category]) consolidated[category] = {};
+        if (!consolidated[category][item.name]) {
+          consolidated[category][item.name] = {
+            name: item.name, quantity: 0, unit: item.unit,
+            vendor: ingInfo.vendor || 'Unassigned',
+            packSize: ingInfo.pack_size || '',
+            casePrice: ingInfo.case_price || 0,
+            unitPrice: ingInfo.unit_price || 0,
+            sources: []
+          };
+        }
+        consolidated[category][item.name].quantity += parseFloat(item.quantity) || 0;
+        consolidated[category][item.name].sources.push(recipe.name);
+      });
+    });
+    return consolidated;
+  }, [recipes, ingMap]);
 
   // Calculate recipe costs
   const recipeCosts = useMemo(() => {
     const costs = {};
-    
     recipes.forEach(recipe => {
       let total = 0;
       const recipeIngs = typeof recipe.ingredients === 'string'
         ? JSON.parse(recipe.ingredients)
         : recipe.ingredients || [];
-      
       recipeIngs.forEach(item => {
         const ingInfo = ingMap[item.name?.toLowerCase()] || {};
         const qty = parseFloat(item.quantity) || 0;
         const recipeUnit = item.unit || 'each';
-        
         if (qty === 0) return;
-        
-        // Get cost per unit from case_price / pack_size
         if (ingInfo.case_price && ingInfo.pack_size) {
           const pack = parsePackSize(ingInfo.pack_size);
           const costPerPackUnit = ingInfo.case_price / pack.qty;
-          
-          // Convert recipe qty to pack units
           const convertedQty = convertToPackUnits(qty, recipeUnit, pack.unit);
           total += convertedQty * costPerPackUnit;
         } else if (ingInfo.unit_price) {
-          // Fallback to unit_price (already cost per unit)
           total += qty * ingInfo.unit_price;
         } else if (ingInfo.case_price) {
-          // Last resort: estimate 1/4 case
           total += ingInfo.case_price * 0.25;
         }
       });
-      
       costs[recipe.id] = total;
     });
-    
     return costs;
   }, [recipes, ingMap]);
 
-  const totalFoodCost = useMemo(() => {
+  const recipesFoodCost = useMemo(() => {
     return Object.values(recipeCosts).reduce((sum, cost) => sum + cost, 0);
   }, [recipeCosts]);
 
-  // Toggle task completion - save to database
+  // TOTAL food cost = recipes + direct items
+  const totalFoodCost = recipesFoodCost + directItemsCost;
+
+  // Check if we have direct items
+  const hasDirectItems = eventItems.length > 0;
+  const hasRecipes = recipes.length > 0;
+
+  // Toggle task completion
   const toggleTask = async (day, index) => {
     const key = `${day}-${index}`;
     const newValue = !completedTasks[key];
     const updated = { ...completedTasks, [key]: newValue };
     setCompletedTasks(updated);
-    
-    // Update prep_tasks in database
     const updatedPrepTasks = { ...prepTasks };
     if (updatedPrepTasks[day] && updatedPrepTasks[day][index]) {
-      updatedPrepTasks[day][index] = { 
-        ...updatedPrepTasks[day][index], 
-        done: newValue 
-      };
+      updatedPrepTasks[day][index] = { ...updatedPrepTasks[day][index], done: newValue };
     }
-    
-    await supabase
-      .from('catering_events')
-      .update({ prep_tasks: updatedPrepTasks })
-      .eq('id', eventId);
-    
+    await supabase.from('catering_events').update({ prep_tasks: updatedPrepTasks }).eq('id', eventId);
     setPrepTasks(updatedPrepTasks);
   };
 
-  // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return 'TBD';
     const d = new Date(dateStr + 'T12:00:00');
     return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  // Get prep day labels
   const getPrepDayLabel = (dayKey) => {
     if (!event?.event_date) return dayKey;
     const eventDate = new Date(event.event_date + 'T12:00:00');
-    
     if (dayKey === 'day-0') {
       return `${eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} (Event Day)`;
     } else if (dayKey === 'day-1') {
-      const d = new Date(eventDate);
-      d.setDate(d.getDate() - 1);
+      const d = new Date(eventDate); d.setDate(d.getDate() - 1);
       return `${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} (Day Before)`;
     } else if (dayKey === 'day-2') {
-      const d = new Date(eventDate);
-      d.setDate(d.getDate() - 2);
+      const d = new Date(eventDate); d.setDate(d.getDate() - 2);
       return `${d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} (2 Days Before)`;
     }
     return dayKey;
@@ -333,6 +314,36 @@ export default function CateringEventDetail() {
   // Print prep plan
   const printPrepPlan = () => {
     const printWindow = window.open('', '_blank');
+    
+    // Build shopping list HTML from both sources
+    let shoppingHTML = '';
+    
+    // Direct items (from items JSONB)
+    if (hasDirectItems) {
+      const cats = categoryOrder.filter(cat => directItemsByCategory[cat]);
+      cats.forEach(cat => {
+        const items = directItemsByCategory[cat];
+        shoppingHTML += `<h3>${cat}</h3><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Notes</th><th>Est. Cost</th></tr></thead><tbody>`;
+        items.sort((a, b) => a.name.localeCompare(b.name)).forEach(item => {
+          const cost = (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_cost) || 0);
+          shoppingHTML += `<tr><td>${item.name}</td><td>${item.quantity}</td><td>${item.unit}</td><td>${item.notes || ''}</td><td>$${cost.toFixed(2)}</td></tr>`;
+        });
+        shoppingHTML += `</tbody></table>`;
+      });
+    }
+    
+    // Recipe-based items
+    if (hasRecipes) {
+      const cats = categoryOrder.filter(cat => recipeShoppingList[cat]);
+      cats.forEach(cat => {
+        shoppingHTML += `<h3>${cat} (from recipes)</h3><table><thead><tr><th>Item</th><th>Qty</th><th>Vendor</th><th>Pack</th></tr></thead><tbody>`;
+        Object.values(recipeShoppingList[cat]).forEach(item => {
+          shoppingHTML += `<tr><td>${item.name}</td><td>${item.quantity} ${item.unit}</td><td>${item.vendor}</td><td>${item.packSize}</td></tr>`;
+        });
+        shoppingHTML += `</tbody></table>`;
+      });
+    }
+
     printWindow.document.write(`
       <html>
       <head>
@@ -341,11 +352,13 @@ export default function CateringEventDetail() {
           body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
           h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
           h2 { color: #374151; margin-top: 24px; }
+          h3 { color: #555; font-size: 14px; background: #f0f0f0; padding: 6px 10px; margin: 12px 0 4px 0; }
           .event-info { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          table { width: 100%; border-collapse: collapse; margin-top: 5px; margin-bottom: 10px; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 12px; }
           th { background: #f3f4f6; }
           .checkbox { width: 20px; text-align: center; }
+          .cost-summary { background: #e8f5e9; padding: 12px; border-radius: 6px; margin: 15px 0; font-weight: bold; }
           @media print { button { display: none; } }
         </style>
       </head>
@@ -357,6 +370,7 @@ export default function CateringEventDetail() {
           <p><strong>Guests:</strong> ${event?.guest_count || 'TBD'}</p>
           <p><strong>Location:</strong> ${event?.location || 'TBD'}</p>
         </div>
+        <div class="cost-summary">Estimated Food Cost: $${totalFoodCost.toFixed(2)}</div>
         
         ${['day-2', 'day-1', 'day-0'].map(day => `
           <h2>${getPrepDayLabel(day)}</h2>
@@ -371,22 +385,7 @@ export default function CateringEventDetail() {
         `).join('')}
         
         <h2>Shopping List</h2>
-        ${categoryOrder.filter(cat => shoppingList[cat]).map(cat => `
-          <h3>${cat}</h3>
-          <table>
-            <thead><tr><th>Item</th><th>Qty</th><th>Vendor</th><th>Pack</th></tr></thead>
-            <tbody>
-              ${Object.values(shoppingList[cat]).map(item => `
-                <tr>
-                  <td>${item.name}</td>
-                  <td>${item.quantity} ${item.unit}</td>
-                  <td>${item.vendor}</td>
-                  <td>${item.packSize}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        `).join('')}
+        ${shoppingHTML}
         
         <button onclick="window.print()" style="margin-top:20px;padding:10px 20px">Print</button>
       </body>
@@ -418,7 +417,7 @@ export default function CateringEventDetail() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <button 
+        <button
           onClick={() => navigate('/catering')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
         >
@@ -466,14 +465,14 @@ export default function CateringEventDetail() {
           >
             {tab === 'overview' && '📋 Overview'}
             {tab === 'recipes' && `🍽️ Recipes (${recipes.length})`}
-            {tab === 'shopping' && '🛒 Shopping List'}
+            {tab === 'shopping' && `🛒 Shopping List${hasDirectItems ? ` (${eventItems.length})` : ''}`}
             {tab === 'pull' && '📦 Pull List'}
             {tab === 'prep' && '✅ Prep Tasks'}
           </button>
         ))}
       </div>
 
-      {/* Overview Tab */}
+      {/* ============ Overview Tab ============ */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Event Details */}
@@ -505,19 +504,37 @@ export default function CateringEventDetail() {
             </div>
           </div>
 
-          {/* Cost Summary */}
+          {/* Cost Summary — now includes direct items */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Cost Summary</h2>
             <div className="space-y-3">
+              {hasDirectItems && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Direct Items ({eventItems.length}):</span>
+                  <span className="font-medium">${directItemsCost.toFixed(2)}</span>
+                </div>
+              )}
+              {hasRecipes && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Recipe Items:</span>
+                  <span className="font-medium">${recipesFoodCost.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-600">Food Cost (Est.):</span>
-                <span className="font-medium">${totalFoodCost.toFixed(2)}</span>
+                <span className="font-bold text-lg">${totalFoodCost.toFixed(2)}</span>
               </div>
+              {event.guest_count > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Cost per guest:</span>
+                  <span className="text-gray-600">${(totalFoodCost / event.guest_count).toFixed(2)}</span>
+                </div>
+              )}
+              <hr />
               <div className="flex justify-between">
                 <span className="text-gray-600">Menu Price:</span>
                 <span className="font-medium">${event.total_price?.toFixed(2) || '0.00'}</span>
               </div>
-              <hr />
               <div className="flex justify-between text-lg">
                 <span className="text-gray-800 font-medium">Gross Margin:</span>
                 <span className="font-bold text-green-600">
@@ -532,12 +549,40 @@ export default function CateringEventDetail() {
             </div>
           </div>
 
-          {/* Menu */}
+          {/* Menu / Items Summary */}
           <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Menu</h2>
-            {recipes.length === 0 ? (
-              <p className="text-gray-500">No recipes linked to this event.</p>
-            ) : (
+            
+            {/* Direct items summary by category */}
+            {hasDirectItems && (
+              <div className="mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {categoryOrder.filter(cat => directItemsByCategory[cat]).map(cat => {
+                    const items = directItemsByCategory[cat];
+                    const colors = categoryColors[cat] || categoryColors['Other'];
+                    const catCost = items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0), 0);
+                    return (
+                      <div key={cat} className={`rounded-lg border ${colors.border} p-4 ${colors.bg}`}>
+                        <h3 className={`font-bold ${colors.text} mb-2`}>{cat}</h3>
+                        <ul className="text-sm space-y-1">
+                          {items.map((item, idx) => (
+                            <li key={idx} className="text-gray-700">
+                              {item.name} <span className="text-gray-500">({item.quantity} {item.unit})</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className={`text-sm font-medium ${colors.text} mt-2 pt-2 border-t ${colors.border}`}>
+                          Subtotal: ${catCost.toFixed(2)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recipe-linked menu items */}
+            {hasRecipes && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {recipes.map(recipe => (
                   <div key={recipe.id} className="border rounded-lg p-4 hover:bg-gray-50">
@@ -552,24 +597,30 @@ export default function CateringEventDetail() {
               </div>
             )}
 
-          {/* Event Notes */}
-          {event?.notes && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow p-6 mt-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">📝 Event Notes</h2>
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{event.notes}</pre>
-            </div>
-          )}
+            {!hasDirectItems && !hasRecipes && (
+              <p className="text-gray-500">No recipes or items linked to this event.</p>
+            )}
+
+            {/* Event Notes */}
+            {event?.notes && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow p-6 mt-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">📝 Event Notes</h2>
+                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{event.notes}</pre>
+              </div>
+            )}
           </div>
         </div>
-
       )}
 
-      {/* Recipes Tab */}
+      {/* ============ Recipes Tab ============ */}
       {activeTab === 'recipes' && (
         <div className="space-y-6">
           {recipes.length === 0 ? (
             <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
               No recipes linked to this event.
+              {hasDirectItems && (
+                <p className="mt-2 text-sm">This event has {eventItems.length} direct items — see the Shopping List tab.</p>
+              )}
             </div>
           ) : (
             recipes.map(recipe => {
@@ -586,9 +637,7 @@ export default function CateringEventDetail() {
                       {recipe.portions} portions • {recipe.course} • {recipe.source}
                     </p>
                   </div>
-                  
                   <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Ingredients */}
                     <div>
                       <h3 className="font-bold text-gray-800 mb-3">Ingredients</h3>
                       <table className="w-full text-sm">
@@ -613,8 +662,6 @@ export default function CateringEventDetail() {
                         Est. Food Cost: ${recipeCosts[recipe.id]?.toFixed(2) || '0.00'}
                       </p>
                     </div>
-                    
-                    {/* Procedure */}
                     <div>
                       <h3 className="font-bold text-gray-800 mb-3">Procedure</h3>
                       <ol className="space-y-2 text-sm">
@@ -639,68 +686,164 @@ export default function CateringEventDetail() {
         </div>
       )}
 
-      {/* Shopping List Tab */}
+      {/* ============ Shopping List Tab ============ */}
       {activeTab === 'shopping' && (
         <div className="space-y-6">
-          {categoryOrder.filter(cat => shoppingList[cat]).map(cat => {
-            const colors = categoryColors[cat] || categoryColors['Pantry'];
-            const items = Object.values(shoppingList[cat]);
-            
-            return (
-              <div key={cat} className={`rounded-lg border-2 ${colors.border} overflow-hidden`}>
-                <div className={`${colors.header} text-white px-4 py-3`}>
-                  <h2 className="text-lg font-bold">{cat}</h2>
-                  <p className="text-sm opacity-80">{items.length} items</p>
-                </div>
+          {/* Direct items from event.items JSONB */}
+          {hasDirectItems && (
+            <>
+              {categoryOrder.filter(cat => directItemsByCategory[cat]).map(cat => {
+                const colors = categoryColors[cat] || categoryColors['Other'];
+                const items = directItemsByCategory[cat];
+                const catTotal = items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0), 0);
                 
-                <div className="bg-white">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b">
-                        <th className="text-left px-4 py-2">Item</th>
-                        <th className="text-right px-4 py-2">Qty</th>
-                        <th className="text-left px-4 py-2">Unit</th>
-                        <th className="text-left px-4 py-2">Vendor</th>
-                        <th className="text-left px-4 py-2">Pack Size</th>
-                        <th className="text-right px-4 py-2">Est. Cost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.sort((a, b) => a.name.localeCompare(b.name)).map((item, idx) => (
-                        <tr key={idx} className="border-b hover:bg-gray-50">
-                          <td className="px-4 py-2 font-medium">{item.name}</td>
-                          <td className="px-4 py-2 text-right">{item.quantity}</td>
-                          <td className="px-4 py-2">{item.unit}</td>
-                          <td className="px-4 py-2 text-gray-600">{item.vendor}</td>
-                          <td className="px-4 py-2 text-gray-600">{item.packSize || '-'}</td>
-                          <td className="px-4 py-2 text-right text-gray-600">
-                            {(() => {
-                              if (!item.casePrice || !item.packSize) return '-';
-                              const pack = parsePackSize(item.packSize);
-                              const costPerPackUnit = item.casePrice / pack.qty;
-                              const convertedQty = convertToPackUnits(item.quantity, item.unit, pack.unit);
-                              return `$${(convertedQty * costPerPackUnit).toFixed(2)}`;
-                            })()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                return (
+                  <div key={cat} className={`rounded-lg border-2 ${colors.border} overflow-hidden`}>
+                    <div className={`${colors.header} text-white px-4 py-3 flex justify-between items-center`}>
+                      <div>
+                        <h2 className="text-lg font-bold">{cat}</h2>
+                        <p className="text-sm opacity-80">{items.length} items</p>
+                      </div>
+                      <span className="text-lg font-bold">${catTotal.toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="bg-white">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b">
+                            <th className="text-left px-4 py-2">Item</th>
+                            <th className="text-right px-4 py-2">Qty</th>
+                            <th className="text-left px-4 py-2">Unit</th>
+                            <th className="text-left px-4 py-2">Source</th>
+                            <th className="text-right px-4 py-2">Unit Cost</th>
+                            <th className="text-right px-4 py-2">Line Total</th>
+                            <th className="text-left px-4 py-2">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.sort((a, b) => a.name.localeCompare(b.name)).map((item, idx) => {
+                            const qty = parseFloat(item.quantity) || 0;
+                            const unitCost = parseFloat(item.unit_cost) || 0;
+                            const lineTotal = qty * unitCost;
+                            const source = item.costco_item ? `Costco #${item.costco_item}` : (item.vendor || '');
+                            return (
+                              <tr key={idx} className="border-b hover:bg-gray-50">
+                                <td className="px-4 py-2 font-medium">{item.name}</td>
+                                <td className="px-4 py-2 text-right font-semibold">{item.quantity}</td>
+                                <td className="px-4 py-2 text-gray-600">{item.unit}</td>
+                                <td className="px-4 py-2 text-gray-500 text-xs">{source}</td>
+                                <td className="px-4 py-2 text-right text-gray-600">
+                                  {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '-'}
+                                </td>
+                                <td className="px-4 py-2 text-right font-medium text-green-700">
+                                  {lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'}
+                                </td>
+                                <td className="px-4 py-2 text-gray-500 text-xs max-w-xs truncate" title={item.notes}>
+                                  {item.notes || ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Direct items total */}
+              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 flex justify-between items-center">
+                <div>
+                  <span className="text-lg font-bold text-green-800">Estimated Total</span>
+                  <span className="text-sm text-green-600 ml-3">({eventItems.length} items)</span>
                 </div>
+                <span className="text-2xl font-bold text-green-700">${directItemsCost.toFixed(2)}</span>
               </div>
-            );
-          })}
+
+              {event.guest_count > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center text-sm text-blue-700">
+                  <strong>${(directItemsCost / event.guest_count).toFixed(2)}</strong> per guest
+                  ({event.guest_count} guests)
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Recipe-based shopping list (existing behavior) */}
+          {hasRecipes && (
+            <>
+              {hasDirectItems && (
+                <div className="border-t-2 border-gray-300 pt-6 mt-6">
+                  <h2 className="text-xl font-bold text-gray-700 mb-4">📋 From Linked Recipes</h2>
+                </div>
+              )}
+              {categoryOrder.filter(cat => recipeShoppingList[cat]).map(cat => {
+                const colors = categoryColors[cat] || categoryColors['Other'];
+                const items = Object.values(recipeShoppingList[cat]);
+                
+                return (
+                  <div key={`recipe-${cat}`} className={`rounded-lg border-2 ${colors.border} overflow-hidden`}>
+                    <div className={`${colors.header} text-white px-4 py-3`}>
+                      <h2 className="text-lg font-bold">{cat}</h2>
+                      <p className="text-sm opacity-80">{items.length} items</p>
+                    </div>
+                    <div className="bg-white">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b">
+                            <th className="text-left px-4 py-2">Item</th>
+                            <th className="text-right px-4 py-2">Qty</th>
+                            <th className="text-left px-4 py-2">Unit</th>
+                            <th className="text-left px-4 py-2">Vendor</th>
+                            <th className="text-left px-4 py-2">Pack Size</th>
+                            <th className="text-right px-4 py-2">Est. Cost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.sort((a, b) => a.name.localeCompare(b.name)).map((item, idx) => (
+                            <tr key={idx} className="border-b hover:bg-gray-50">
+                              <td className="px-4 py-2 font-medium">{item.name}</td>
+                              <td className="px-4 py-2 text-right">{item.quantity}</td>
+                              <td className="px-4 py-2">{item.unit}</td>
+                              <td className="px-4 py-2 text-gray-600">{item.vendor}</td>
+                              <td className="px-4 py-2 text-gray-600">{item.packSize || '-'}</td>
+                              <td className="px-4 py-2 text-right text-gray-600">
+                                {(() => {
+                                  if (!item.casePrice || !item.packSize) return '-';
+                                  const pack = parsePackSize(item.packSize);
+                                  const costPerPackUnit = item.casePrice / pack.qty;
+                                  const convertedQty = convertToPackUnits(item.quantity, item.unit, pack.unit);
+                                  return `$${(convertedQty * costPerPackUnit).toFixed(2)}`;
+                                })()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {!hasDirectItems && !hasRecipes && (
+            <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+              No items or recipes linked to this event yet.
+            </div>
+          )}
         </div>
       )}
 
-      {/* Pull List Tab */}
+      {/* ============ Pull List Tab ============ */}
       {activeTab === 'pull' && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">Pull List - {event?.event_name}</h2>
             <button
               onClick={() => {
-                const printContent = document.getElementById('pull-list-print').innerHTML;
+                const printContent = document.getElementById('pull-list-print')?.innerHTML;
+                if (!printContent) return;
                 const win = window.open('', '_blank');
                 win.document.write(`
                   <html>
@@ -714,7 +857,6 @@ export default function CateringEventDetail() {
                         table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
                         th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 12px; }
                         th { background: #f5f5f5; font-weight: bold; }
-                        .checkbox { width: 20px; height: 20px; border: 2px solid #333; display: inline-block; }
                         .qty { text-align: right; font-weight: bold; }
                         @media print { body { padding: 0; } }
                       </style>
@@ -732,139 +874,182 @@ export default function CateringEventDetail() {
           </div>
 
           <div id="pull-list-print">
-            <div className="hidden print:block">
-              <h1>{event?.event_name}</h1>
-              <h2>{new Date(event?.event_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} • {event?.guest_count} guests</h2>
-            </div>
+            {/* Direct items pull list — grouped by storage location */}
+            {hasDirectItems && (() => {
+              // Map categories to storage locations
+              const storageMap = {
+                'Charcuterie': 'Walk-in Cooler',
+                'Cheese': 'Walk-in Cooler',
+                'Protein': 'Freezer',
+                'Produce': 'Walk-in Cooler',
+                'Dairy': 'Walk-in Cooler',
+                'Dairy & Eggs': 'Walk-in Cooler',
+                'Meat & Seafood': 'Meat Cooler',
+                'Frozen': 'Freezer',
+                'Accompaniment': 'Dry Storage',
+                'Pantry': 'Dry Storage',
+                'Bakery': 'Dry Storage',
+                'Beverages': 'Dry Storage',
+                'Garnish': 'Walk-in Cooler',
+                'Other': 'Dry Storage',
+              };
+              
+              const byStorage = {};
+              eventItems.forEach(item => {
+                const loc = storageMap[item.category] || 'Dry Storage';
+                if (!byStorage[loc]) byStorage[loc] = [];
+                byStorage[loc].push(item);
+              });
 
-            {/* Walk-in Cooler */}
-            <div className="mb-6">
-              <h3 className="font-bold text-lg bg-blue-100 text-blue-800 px-4 py-2 rounded-t">🧊 Walk-in Cooler</h3>
-              <table className="w-full border">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="w-10 px-3 py-2 border">✓</th>
-                    <th className="text-left px-3 py-2 border">Item</th>
-                    <th className="text-right px-3 py-2 border w-20">Qty</th>
-                    <th className="text-left px-3 py-2 border w-20">Unit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(shoppingList)
-                    .filter(([cat]) => ['Produce', 'Dairy'].includes(cat))
-                    .flatMap(([cat, items]) => Object.values(items))
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 border text-center">
-                          <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
-                        </td>
-                        <td className="px-3 py-2 border font-medium">{item.name}</td>
-                        <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
-                        <td className="px-3 py-2 border">{item.unit}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+              const storageConfig = {
+                'Walk-in Cooler': { icon: '🧊', headerBg: 'bg-blue-100', headerText: 'text-blue-800' },
+                'Meat Cooler': { icon: '🥩', headerBg: 'bg-red-100', headerText: 'text-red-800' },
+                'Freezer': { icon: '❄️', headerBg: 'bg-purple-100', headerText: 'text-purple-800' },
+                'Dry Storage': { icon: '📦', headerBg: 'bg-amber-100', headerText: 'text-amber-800' },
+              };
+              
+              const storageOrder = ['Walk-in Cooler', 'Meat Cooler', 'Freezer', 'Dry Storage'];
 
-            {/* Meat Cooler */}
-            {shoppingList['Meat & Seafood'] && Object.keys(shoppingList['Meat & Seafood']).length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-bold text-lg bg-red-100 text-red-800 px-4 py-2 rounded-t">🥩 Meat Cooler</h3>
-                <table className="w-full border">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="w-10 px-3 py-2 border">✓</th>
-                      <th className="text-left px-3 py-2 border">Item</th>
-                      <th className="text-right px-3 py-2 border w-20">Qty</th>
-                      <th className="text-left px-3 py-2 border w-20">Unit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.values(shoppingList['Meat & Seafood'])
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 border text-center">
-                            <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
-                          </td>
-                          <td className="px-3 py-2 border font-medium">{item.name}</td>
-                          <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
-                          <td className="px-3 py-2 border">{item.unit}</td>
+              return storageOrder.filter(loc => byStorage[loc]?.length > 0).map(loc => {
+                const config = storageConfig[loc];
+                const items = byStorage[loc].sort((a, b) => a.name.localeCompare(b.name));
+                return (
+                  <div key={loc} className="mb-6">
+                    <h3 className={`font-bold text-lg ${config.headerBg} ${config.headerText} px-4 py-2 rounded-t`}>
+                      {config.icon} {loc}
+                    </h3>
+                    <table className="w-full border">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="w-10 px-3 py-2 border">✓</th>
+                          <th className="text-left px-3 py-2 border">Item</th>
+                          <th className="text-left px-3 py-2 border w-24">Category</th>
+                          <th className="text-right px-3 py-2 border w-20">Qty</th>
+                          <th className="text-left px-3 py-2 border w-20">Unit</th>
                         </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody>
+                        {items.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 border text-center">
+                              <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                            </td>
+                            <td className="px-3 py-2 border font-medium">{item.name}</td>
+                            <td className="px-3 py-2 border text-xs text-gray-500">{item.category}</td>
+                            <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                            <td className="px-3 py-2 border">{item.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              });
+            })()}
+
+            {/* Recipe-based pull list (existing) */}
+            {hasRecipes && !hasDirectItems && (
+              <>
+                <div className="mb-6">
+                  <h3 className="font-bold text-lg bg-blue-100 text-blue-800 px-4 py-2 rounded-t">🧊 Walk-in Cooler</h3>
+                  <table className="w-full border">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="w-10 px-3 py-2 border">✓</th>
+                        <th className="text-left px-3 py-2 border">Item</th>
+                        <th className="text-right px-3 py-2 border w-20">Qty</th>
+                        <th className="text-left px-3 py-2 border w-20">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(recipeShoppingList)
+                        .filter(([cat]) => ['Produce', 'Dairy'].includes(cat))
+                        .flatMap(([, items]) => Object.values(items))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 border text-center">
+                              <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                            </td>
+                            <td className="px-3 py-2 border font-medium">{item.name}</td>
+                            <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                            <td className="px-3 py-2 border">{item.unit}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {recipeShoppingList['Meat & Seafood'] && Object.keys(recipeShoppingList['Meat & Seafood']).length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="font-bold text-lg bg-red-100 text-red-800 px-4 py-2 rounded-t">🥩 Meat Cooler</h3>
+                    <table className="w-full border">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="w-10 px-3 py-2 border">✓</th>
+                          <th className="text-left px-3 py-2 border">Item</th>
+                          <th className="text-right px-3 py-2 border w-20">Qty</th>
+                          <th className="text-left px-3 py-2 border w-20">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.values(recipeShoppingList['Meat & Seafood'])
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 border text-center">
+                                <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                              </td>
+                              <td className="px-3 py-2 border font-medium">{item.name}</td>
+                              <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                              <td className="px-3 py-2 border">{item.unit}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <h3 className="font-bold text-lg bg-amber-100 text-amber-800 px-4 py-2 rounded-t">📦 Dry Storage</h3>
+                  <table className="w-full border">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="w-10 px-3 py-2 border">✓</th>
+                        <th className="text-left px-3 py-2 border">Item</th>
+                        <th className="text-right px-3 py-2 border w-20">Qty</th>
+                        <th className="text-left px-3 py-2 border w-20">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(recipeShoppingList)
+                        .filter(([cat]) => ['Pantry', 'Bakery', 'Beverages'].includes(cat))
+                        .flatMap(([, items]) => Object.values(items))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 border text-center">
+                              <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                            </td>
+                            <td className="px-3 py-2 border font-medium">{item.name}</td>
+                            <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                            <td className="px-3 py-2 border">{item.unit}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
 
-            {/* Freezer */}
-            {shoppingList['Frozen'] && Object.keys(shoppingList['Frozen']).length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-bold text-lg bg-purple-100 text-purple-800 px-4 py-2 rounded-t">❄️ Freezer</h3>
-                <table className="w-full border">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="w-10 px-3 py-2 border">✓</th>
-                      <th className="text-left px-3 py-2 border">Item</th>
-                      <th className="text-right px-3 py-2 border w-20">Qty</th>
-                      <th className="text-left px-3 py-2 border w-20">Unit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.values(shoppingList['Frozen'])
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 border text-center">
-                            <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
-                          </td>
-                          <td className="px-3 py-2 border font-medium">{item.name}</td>
-                          <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
-                          <td className="px-3 py-2 border">{item.unit}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+            {!hasDirectItems && !hasRecipes && (
+              <p className="text-gray-500 text-center py-8">No items to pull.</p>
             )}
-
-            {/* Dry Storage */}
-            <div className="mb-6">
-              <h3 className="font-bold text-lg bg-amber-100 text-amber-800 px-4 py-2 rounded-t">📦 Dry Storage</h3>
-              <table className="w-full border">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="w-10 px-3 py-2 border">✓</th>
-                    <th className="text-left px-3 py-2 border">Item</th>
-                    <th className="text-right px-3 py-2 border w-20">Qty</th>
-                    <th className="text-left px-3 py-2 border w-20">Unit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(shoppingList)
-                    .filter(([cat]) => ['Pantry', 'Bakery', 'Beverages'].includes(cat))
-                    .flatMap(([cat, items]) => Object.values(items))
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 border text-center">
-                          <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
-                        </td>
-                        <td className="px-3 py-2 border font-medium">{item.name}</td>
-                        <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
-                        <td className="px-3 py-2 border">{item.unit}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Prep Tasks Tab */}
+      {/* ============ Prep Tasks Tab ============ */}
       {activeTab === 'prep' && (
         <div className="space-y-6">
           {['day-2', 'day-1', 'day-0'].map(day => {
@@ -882,7 +1067,7 @@ export default function CateringEventDetail() {
                     </p>
                   </div>
                   <div className={`text-2xl font-bold ${isEventDay ? 'text-white' : 'text-gray-400'}`}>
-                    {Math.round((completedCount / tasks.length) * 100) || 0}%
+                    {tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0}%
                   </div>
                 </div>
                 
@@ -898,8 +1083,8 @@ export default function CateringEventDetail() {
                         }`}
                       >
                         <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
-                          isComplete 
-                            ? 'bg-green-500 border-green-500 text-white' 
+                          isComplete
+                            ? 'bg-green-500 border-green-500 text-white'
                             : 'border-gray-300'
                         }`}>
                           {isComplete && <CheckIcon />}
