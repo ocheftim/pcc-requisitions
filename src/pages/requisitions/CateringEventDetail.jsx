@@ -175,6 +175,29 @@ export default function CateringEventDetail() {
     return grouped;
   }, [eventItems]);
 
+  // Group items by meal period → category, for service-period segmentation in Shopping & Pull lists
+  const directItemsByMeal = useMemo(() => {
+    const grouped = {};
+    eventItems.forEach(item => {
+      const meal = item.meal || 'Unassigned';
+      const category = item.category || 'Other';
+      if (!grouped[meal]) grouped[meal] = {};
+      if (!grouped[meal][category]) grouped[meal][category] = [];
+      grouped[meal][category].push(item);
+    });
+    return grouped;
+  }, [eventItems]);
+
+  const mealOrder = ['Breakfast', 'Lunch', 'Dinner', 'Beverages', 'Reception', 'Unassigned'];
+  const mealConfig = {
+    'Breakfast':  { icon: '🌅', accent: 'bg-amber-50 border-amber-300 text-amber-900' },
+    'Lunch':      { icon: '🥗', accent: 'bg-emerald-50 border-emerald-300 text-emerald-900' },
+    'Dinner':     { icon: '🍽️', accent: 'bg-indigo-50 border-indigo-300 text-indigo-900' },
+    'Beverages':  { icon: '☕', accent: 'bg-stone-50 border-stone-300 text-stone-900' },
+    'Reception':  { icon: '🥂', accent: 'bg-rose-50 border-rose-300 text-rose-900' },
+    'Unassigned': { icon: '❓', accent: 'bg-gray-50 border-gray-300 text-gray-700' },
+  };
+
   // Helper to parse pack size
   const parsePackSize = (packSize) => {
     if (!packSize) return { qty: 1, unit: 'each' };
@@ -689,64 +712,85 @@ export default function CateringEventDetail() {
       {/* ============ Shopping List Tab ============ */}
       {activeTab === 'shopping' && (
         <div className="space-y-6">
-          {/* Direct items from event.items JSONB */}
+          {/* Direct items from event.items JSONB — grouped by meal period, then category */}
           {hasDirectItems && (
             <>
-              {categoryOrder.filter(cat => directItemsByCategory[cat]).map(cat => {
-                const colors = categoryColors[cat] || categoryColors['Other'];
-                const items = directItemsByCategory[cat];
-                const catTotal = items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0), 0);
-                
+              {mealOrder.filter(meal => directItemsByMeal[meal]).map(meal => {
+                const meta = mealConfig[meal] || mealConfig['Unassigned'];
+                const catsInMeal = categoryOrder.filter(cat => directItemsByMeal[meal][cat]);
+                const mealItemCount = catsInMeal.reduce((n, c) => n + directItemsByMeal[meal][c].length, 0);
+                const mealTotal = catsInMeal.reduce((sum, c) =>
+                  sum + directItemsByMeal[meal][c].reduce((s, i) =>
+                    s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0), 0), 0);
+
                 return (
-                  <div key={cat} className={`rounded-lg border-2 ${colors.border} overflow-hidden`}>
-                    <div className={`${colors.header} text-white px-4 py-3 flex justify-between items-center`}>
-                      <div>
-                        <h2 className="text-lg font-bold">{cat}</h2>
-                        <p className="text-sm opacity-80">{items.length} items</p>
+                  <div key={`meal-${meal}`} className="space-y-3">
+                    <div className={`flex justify-between items-center px-4 py-3 rounded-lg border-2 ${meta.accent}`}>
+                      <h2 className="text-xl font-bold">{meta.icon} {meal}</h2>
+                      <div className="text-right">
+                        <div className="text-sm opacity-75">{mealItemCount} items</div>
+                        <div className="text-lg font-bold">${mealTotal.toFixed(2)}</div>
                       </div>
-                      <span className="text-lg font-bold">${catTotal.toFixed(2)}</span>
                     </div>
-                    
-                    <div className="bg-white">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 border-b">
-                            <th className="text-left px-4 py-2">Item</th>
-                            <th className="text-right px-4 py-2">Qty</th>
-                            <th className="text-left px-4 py-2">Unit</th>
-                            <th className="text-left px-4 py-2">Source</th>
-                            <th className="text-right px-4 py-2">Unit Cost</th>
-                            <th className="text-right px-4 py-2">Line Total</th>
-                            <th className="text-left px-4 py-2">Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {items.sort((a, b) => a.name.localeCompare(b.name)).map((item, idx) => {
-                            const qty = parseFloat(item.quantity) || 0;
-                            const unitCost = parseFloat(item.unit_cost) || 0;
-                            const lineTotal = qty * unitCost;
-                            const source = item.costco_item ? `Costco #${item.costco_item}` : (item.vendor || '');
-                            return (
-                              <tr key={idx} className="border-b hover:bg-gray-50">
-                                <td className="px-4 py-2 font-medium">{item.name}</td>
-                                <td className="px-4 py-2 text-right font-semibold">{item.quantity}</td>
-                                <td className="px-4 py-2 text-gray-600">{item.unit}</td>
-                                <td className="px-4 py-2 text-gray-500 text-xs">{source}</td>
-                                <td className="px-4 py-2 text-right text-gray-600">
-                                  {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '-'}
-                                </td>
-                                <td className="px-4 py-2 text-right font-medium text-green-700">
-                                  {lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'}
-                                </td>
-                                <td className="px-4 py-2 text-gray-500 text-xs max-w-xs truncate" title={item.notes}>
-                                  {item.notes || ''}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+
+                    {catsInMeal.map(cat => {
+                      const colors = categoryColors[cat] || categoryColors['Other'];
+                      const items = directItemsByMeal[meal][cat];
+                      const catTotal = items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0), 0);
+
+                      return (
+                        <div key={`${meal}-${cat}`} className={`rounded-lg border-2 ${colors.border} overflow-hidden ml-4`}>
+                          <div className={`${colors.header} text-white px-4 py-3 flex justify-between items-center`}>
+                            <div>
+                              <h3 className="text-base font-bold">{cat}</h3>
+                              <p className="text-xs opacity-80">{items.length} items</p>
+                            </div>
+                            <span className="text-base font-bold">${catTotal.toFixed(2)}</span>
+                          </div>
+
+                          <div className="bg-white">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-gray-50 border-b">
+                                  <th className="text-left px-4 py-2">Item</th>
+                                  <th className="text-right px-4 py-2">Qty</th>
+                                  <th className="text-left px-4 py-2">Unit</th>
+                                  <th className="text-left px-4 py-2">Source</th>
+                                  <th className="text-right px-4 py-2">Unit Cost</th>
+                                  <th className="text-right px-4 py-2">Line Total</th>
+                                  <th className="text-left px-4 py-2">Notes</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {items.sort((a, b) => a.name.localeCompare(b.name)).map((item, idx) => {
+                                  const qty = parseFloat(item.quantity) || 0;
+                                  const unitCost = parseFloat(item.unit_cost) || 0;
+                                  const lineTotal = qty * unitCost;
+                                  const source = item.costco_item ? `Costco #${item.costco_item}` : (item.vendor || '');
+                                  return (
+                                    <tr key={idx} className="border-b hover:bg-gray-50">
+                                      <td className="px-4 py-2 font-medium">{item.name}</td>
+                                      <td className="px-4 py-2 text-right font-semibold">{item.quantity}</td>
+                                      <td className="px-4 py-2 text-gray-600">{item.unit}</td>
+                                      <td className="px-4 py-2 text-gray-500 text-xs">{source}</td>
+                                      <td className="px-4 py-2 text-right text-gray-600">
+                                        {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '-'}
+                                      </td>
+                                      <td className="px-4 py-2 text-right font-medium text-green-700">
+                                        {lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : '-'}
+                                      </td>
+                                      <td className="px-4 py-2 text-gray-500 text-xs max-w-xs truncate" title={item.notes}>
+                                        {item.notes || ''}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -874,74 +918,86 @@ export default function CateringEventDetail() {
           </div>
 
           <div id="pull-list-print">
-            {/* Direct items pull list — grouped by storage location */}
+            {/* Direct items pull list — grouped by meal period, then storage location */}
             {hasDirectItems && (() => {
-              // Map categories to storage locations
               const storageMap = {
-                'Charcuterie': 'Walk-in Cooler',
-                'Cheese': 'Walk-in Cooler',
-                'Protein': 'Freezer',
-                'Produce': 'Walk-in Cooler',
-                'Dairy': 'Walk-in Cooler',
-                'Dairy & Eggs': 'Walk-in Cooler',
-                'Meat & Seafood': 'Meat Cooler',
-                'Frozen': 'Freezer',
-                'Accompaniment': 'Dry Storage',
-                'Pantry': 'Dry Storage',
-                'Bakery': 'Dry Storage',
-                'Beverages': 'Dry Storage',
-                'Garnish': 'Walk-in Cooler',
-                'Other': 'Dry Storage',
+                'Charcuterie': 'Walk-in Cooler', 'Cheese': 'Walk-in Cooler',
+                'Protein': 'Freezer', 'Produce': 'Walk-in Cooler',
+                'Dairy': 'Walk-in Cooler', 'Dairy & Eggs': 'Walk-in Cooler',
+                'Meat & Seafood': 'Meat Cooler', 'Frozen': 'Freezer',
+                'Accompaniment': 'Dry Storage', 'Pantry': 'Dry Storage',
+                'Bakery': 'Dry Storage', 'Beverages': 'Dry Storage',
+                'Garnish': 'Walk-in Cooler', 'Other': 'Dry Storage',
+                // Catering-specific cats
+                'Quiche': 'Walk-in Cooler', 'Fruit': 'Walk-in Cooler',
+                'Bread': 'Dry Storage', 'GF Frittata': 'Walk-in Cooler',
+                'Gyro Bar': 'Walk-in Cooler', 'Greek Salad': 'Walk-in Cooler',
+                'Veg & Hummus': 'Walk-in Cooler', 'Dessert': 'Dry Storage',
+                'GF Accommodation': 'Dry Storage',
+                'Taco Bar': 'Walk-in Cooler',
+                'Coffee': 'Dry Storage', 'Tea': 'Dry Storage', 'Water': 'Dry Storage',
               };
-              
-              const byStorage = {};
-              eventItems.forEach(item => {
-                const loc = storageMap[item.category] || 'Dry Storage';
-                if (!byStorage[loc]) byStorage[loc] = [];
-                byStorage[loc].push(item);
-              });
 
               const storageConfig = {
                 'Walk-in Cooler': { icon: '🧊', headerBg: 'bg-blue-100', headerText: 'text-blue-800' },
-                'Meat Cooler': { icon: '🥩', headerBg: 'bg-red-100', headerText: 'text-red-800' },
-                'Freezer': { icon: '❄️', headerBg: 'bg-purple-100', headerText: 'text-purple-800' },
-                'Dry Storage': { icon: '📦', headerBg: 'bg-amber-100', headerText: 'text-amber-800' },
+                'Meat Cooler':    { icon: '🥩', headerBg: 'bg-red-100',  headerText: 'text-red-800' },
+                'Freezer':        { icon: '❄️', headerBg: 'bg-purple-100', headerText: 'text-purple-800' },
+                'Dry Storage':    { icon: '📦', headerBg: 'bg-amber-100', headerText: 'text-amber-800' },
               };
-              
               const storageOrder = ['Walk-in Cooler', 'Meat Cooler', 'Freezer', 'Dry Storage'];
 
-              return storageOrder.filter(loc => byStorage[loc]?.length > 0).map(loc => {
-                const config = storageConfig[loc];
-                const items = byStorage[loc].sort((a, b) => a.name.localeCompare(b.name));
+              return mealOrder.filter(m => directItemsByMeal[m]).map(meal => {
+                const meta = mealConfig[meal] || mealConfig['Unassigned'];
+                const mealItems = Object.values(directItemsByMeal[meal]).flat();
+                const byStorage = {};
+                mealItems.forEach(item => {
+                  const loc = storageMap[item.category] || 'Dry Storage';
+                  if (!byStorage[loc]) byStorage[loc] = [];
+                  byStorage[loc].push(item);
+                });
+
                 return (
-                  <div key={loc} className="mb-6">
-                    <h3 className={`font-bold text-lg ${config.headerBg} ${config.headerText} px-4 py-2 rounded-t`}>
-                      {config.icon} {loc}
-                    </h3>
-                    <table className="w-full border">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="w-10 px-3 py-2 border">✓</th>
-                          <th className="text-left px-3 py-2 border">Item</th>
-                          <th className="text-left px-3 py-2 border w-24">Category</th>
-                          <th className="text-right px-3 py-2 border w-20">Qty</th>
-                          <th className="text-left px-3 py-2 border w-20">Unit</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 border text-center">
-                              <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
-                            </td>
-                            <td className="px-3 py-2 border font-medium">{item.name}</td>
-                            <td className="px-3 py-2 border text-xs text-gray-500">{item.category}</td>
-                            <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
-                            <td className="px-3 py-2 border">{item.unit}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div key={`pull-meal-${meal}`} className="mb-8">
+                    <div className={`flex justify-between items-center px-4 py-3 mb-3 rounded-lg border-2 ${meta.accent}`}>
+                      <h2 className="text-xl font-bold">{meta.icon} {meal} — Pull</h2>
+                      <span className="text-sm opacity-75">{mealItems.length} items</span>
+                    </div>
+
+                    {storageOrder.filter(loc => byStorage[loc]?.length > 0).map(loc => {
+                      const config = storageConfig[loc];
+                      const items = byStorage[loc].sort((a, b) => a.name.localeCompare(b.name));
+                      return (
+                        <div key={`${meal}-${loc}`} className="mb-4 ml-4">
+                          <h3 className={`font-bold text-base ${config.headerBg} ${config.headerText} px-4 py-2 rounded-t`}>
+                            {config.icon} {loc}
+                          </h3>
+                          <table className="w-full border">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="w-10 px-3 py-2 border">✓</th>
+                                <th className="text-left px-3 py-2 border">Item</th>
+                                <th className="text-left px-3 py-2 border w-24">Category</th>
+                                <th className="text-right px-3 py-2 border w-20">Qty</th>
+                                <th className="text-left px-3 py-2 border w-20">Unit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                  <td className="px-3 py-2 border text-center">
+                                    <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                                  </td>
+                                  <td className="px-3 py-2 border font-medium">{item.name}</td>
+                                  <td className="px-3 py-2 border text-xs text-gray-500">{item.category}</td>
+                                  <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                                  <td className="px-3 py-2 border">{item.unit}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               });
