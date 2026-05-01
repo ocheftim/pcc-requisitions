@@ -87,6 +87,8 @@ export default function CateringEventDetail() {
   const [activeTab, setActiveTab] = useState('overview');
   const [prepTasks, setPrepTasks] = useState({});
   const [completedTasks, setCompletedTasks] = useState({});
+  // Pull List grouping mode: 'category' | 'storage' | 'meal-storage'
+  const [pullGroupBy, setPullGroupBy] = useState('category');
 
   useEffect(() => {
     loadEvent();
@@ -178,15 +180,50 @@ export default function CateringEventDetail() {
   // Group items by meal period → category, for service-period segmentation in Shopping & Pull lists
   const directItemsByMeal = useMemo(() => {
     const grouped = {};
-    eventItems.forEach(item => {
+    eventItems.forEach((item, idx) => {
       const meal = item.meal || 'Unassigned';
       const category = item.category || 'Other';
       if (!grouped[meal]) grouped[meal] = {};
       if (!grouped[meal][category]) grouped[meal][category] = [];
-      grouped[meal][category].push(item);
+      // Attach original index so checkbox toggles can target the right row in event.items[]
+      grouped[meal][category].push({ ...item, _idx: idx });
     });
     return grouped;
   }, [eventItems]);
+
+  // Toggle the `pulled` flag on a direct item and persist to catering_events.items
+  const togglePulledDirect = async (idx) => {
+    if (!event?.items || !Array.isArray(eventItems)) return;
+    const updated = eventItems.map((it, i) => i === idx ? { ...it, pulled: !it.pulled } : it);
+    // Optimistic UI: update local state immediately, then persist
+    setEvent(e => ({ ...e, items: updated }));
+    const { error } = await supabase
+      .from('catering_events')
+      .update({ items: updated })
+      .eq('id', eventId);
+    if (error) {
+      console.error('Failed to save pulled state', error);
+      // Revert on failure
+      setEvent(e => ({ ...e, items: eventItems }));
+      alert('Failed to save: ' + error.message);
+    }
+  };
+
+  // Recipe-based items don't have a stable DB row, so we key them by a
+  // composite string and store the pulled state in event.pulled_recipe_items
+  const pulledRecipeMap = event?.pulled_recipe_items || {};
+  const togglePulledRecipe = async (key) => {
+    const updated = { ...pulledRecipeMap, [key]: !pulledRecipeMap[key] };
+    setEvent(e => ({ ...e, pulled_recipe_items: updated }));
+    const { error } = await supabase
+      .from('catering_events')
+      .update({ pulled_recipe_items: updated })
+      .eq('id', eventId);
+    if (error) {
+      console.error('Failed to save pulled state', error);
+      setEvent(e => ({ ...e, pulled_recipe_items: pulledRecipeMap }));
+    }
+  };
 
   const mealOrder = ['Breakfast', 'Lunch', 'Dinner', 'Beverages', 'Reception', 'Unassigned'];
   const mealConfig = {
@@ -882,39 +919,62 @@ export default function CateringEventDetail() {
       {/* ============ Pull List Tab ============ */}
       {activeTab === 'pull' && (
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
             <h2 className="text-xl font-bold">Pull List - {event?.event_name}</h2>
-            <button
-              onClick={() => {
-                const printContent = document.getElementById('pull-list-print')?.innerHTML;
-                if (!printContent) return;
-                const win = window.open('', '_blank');
-                win.document.write(`
-                  <html>
-                    <head>
-                      <title>Pull List - ${event?.event_name}</title>
-                      <style>
-                        body { font-family: Arial, sans-serif; padding: 20px; }
-                        h1 { font-size: 18px; margin-bottom: 5px; }
-                        h2 { font-size: 14px; color: #666; margin-bottom: 20px; }
-                        h3 { font-size: 14px; background: #f0f0f0; padding: 8px; margin: 15px 0 5px 0; }
-                        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-                        th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 12px; }
-                        th { background: #f5f5f5; font-weight: bold; }
-                        .qty { text-align: right; font-weight: bold; }
-                        @media print { body { padding: 0; } }
-                      </style>
-                    </head>
-                    <body>${printContent}</body>
-                  </html>
-                `);
-                win.document.close();
-                win.print();
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              🖨️ Print Pull List
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Group By toggle */}
+              <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm">
+                <span className="px-3 py-2 bg-gray-50 text-gray-600 font-medium border-r border-gray-300">Group by:</span>
+                {[
+                  { v: 'category', label: '🏷️ Category' },
+                  { v: 'storage', label: '📦 Storage' },
+                  { v: 'meal-storage', label: '🍽️ Meal → Storage' },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    onClick={() => setPullGroupBy(opt.v)}
+                    className={`px-3 py-2 border-r last:border-r-0 border-gray-300 transition ${
+                      pullGroupBy === opt.v
+                        ? 'bg-blue-600 text-white font-semibold'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const printContent = document.getElementById('pull-list-print')?.innerHTML;
+                  if (!printContent) return;
+                  const win = window.open('', '_blank');
+                  win.document.write(`
+                    <html>
+                      <head>
+                        <title>Pull List - ${event?.event_name}</title>
+                        <style>
+                          body { font-family: Arial, sans-serif; padding: 20px; }
+                          h1 { font-size: 18px; margin-bottom: 5px; }
+                          h2 { font-size: 14px; color: #666; margin-bottom: 20px; }
+                          h3 { font-size: 14px; background: #f0f0f0; padding: 8px; margin: 15px 0 5px 0; }
+                          table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+                          th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 12px; }
+                          th { background: #f5f5f5; font-weight: bold; }
+                          .qty { text-align: right; font-weight: bold; }
+                          @media print { body { padding: 0; } }
+                        </style>
+                      </head>
+                      <body>${printContent}</body>
+                    </html>
+                  `);
+                  win.document.close();
+                  win.print();
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                🖨️ Print Pull List
+              </button>
+            </div>
           </div>
 
           <div id="pull-list-print">
@@ -934,7 +994,8 @@ export default function CateringEventDetail() {
                 'Gyro Bar': 'Walk-in Cooler', 'Greek Salad': 'Walk-in Cooler',
                 'Veg & Hummus': 'Walk-in Cooler', 'Dessert': 'Dry Storage',
                 'GF Accommodation': 'Dry Storage',
-                'Taco Bar': 'Walk-in Cooler',
+                'Taco Bar': 'Walk-in Cooler', 'Hot Breakfast': 'Walk-in Cooler',
+                'Potatoes': 'Dry Storage',
                 'Coffee': 'Dry Storage', 'Tea': 'Dry Storage', 'Water': 'Dry Storage',
               };
 
@@ -946,6 +1007,117 @@ export default function CateringEventDetail() {
               };
               const storageOrder = ['Walk-in Cooler', 'Meat Cooler', 'Freezer', 'Dry Storage'];
 
+              // Flat list of all event items
+              const allItems = Object.values(directItemsByMeal).flatMap(byCat => Object.values(byCat).flat());
+
+              // ============ MODE: Group by Category ============
+              if (pullGroupBy === 'category') {
+                const byCategory = {};
+                allItems.forEach(item => {
+                  const cat = item.category || 'Other';
+                  if (!byCategory[cat]) byCategory[cat] = [];
+                  byCategory[cat].push(item);
+                });
+                const cats = Object.keys(byCategory).sort();
+
+                return cats.map(cat => {
+                  const items = byCategory[cat].sort((a, b) => a.name.localeCompare(b.name));
+                  const colors = categoryColors[cat] || categoryColors['Other'] || { bg: 'bg-gray-100', text: 'text-gray-800', header: 'bg-gray-600', border: 'border-gray-300' };
+                  return (
+                    <div key={`pull-cat-${cat}`} className="mb-6">
+                      <h3 className={`font-bold text-base ${colors.header} text-white px-4 py-2 rounded-t flex justify-between items-center`}>
+                        <span>🏷️ {cat}</span>
+                        <span className="text-sm opacity-90">{items.length} items</span>
+                      </h3>
+                      <table className="w-full border">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="w-10 px-3 py-2 border">✓</th>
+                            <th className="text-left px-3 py-2 border">Item</th>
+                            <th className="text-left px-3 py-2 border w-32">Storage</th>
+                            <th className="text-right px-3 py-2 border w-20">Qty</th>
+                            <th className="text-left px-3 py-2 border w-20">Unit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 border text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!item.pulled}
+                                  onChange={() => togglePulledDirect(item._idx)}
+                                  className="w-5 h-5 cursor-pointer accent-blue-600"
+                                />
+                              </td>
+                              <td className="px-3 py-2 border font-medium">{item.name}</td>
+                              <td className="px-3 py-2 border text-xs text-gray-600">{storageMap[item.category] || 'Dry Storage'}</td>
+                              <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                              <td className="px-3 py-2 border">{item.unit}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                });
+              }
+
+              // ============ MODE: Group by Storage (flat, no meal split) ============
+              if (pullGroupBy === 'storage') {
+                const byStorage = {};
+                allItems.forEach(item => {
+                  const loc = storageMap[item.category] || 'Dry Storage';
+                  if (!byStorage[loc]) byStorage[loc] = [];
+                  byStorage[loc].push(item);
+                });
+
+                return storageOrder.filter(loc => byStorage[loc]?.length > 0).map(loc => {
+                  const config = storageConfig[loc];
+                  const items = byStorage[loc].sort((a, b) =>
+                    (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name)
+                  );
+                  return (
+                    <div key={`pull-storage-${loc}`} className="mb-6">
+                      <h3 className={`font-bold text-base ${config.headerBg} ${config.headerText} px-4 py-2 rounded-t flex justify-between items-center`}>
+                        <span>{config.icon} {loc}</span>
+                        <span className="text-sm opacity-75">{items.length} items</span>
+                      </h3>
+                      <table className="w-full border">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="w-10 px-3 py-2 border">✓</th>
+                            <th className="text-left px-3 py-2 border">Item</th>
+                            <th className="text-left px-3 py-2 border w-28">Category</th>
+                            <th className="text-right px-3 py-2 border w-20">Qty</th>
+                            <th className="text-left px-3 py-2 border w-20">Unit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 border text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!item.pulled}
+                                  onChange={() => togglePulledDirect(item._idx)}
+                                  className="w-5 h-5 cursor-pointer accent-blue-600"
+                                />
+                              </td>
+                              <td className="px-3 py-2 border font-medium">{item.name}</td>
+                              <td className="px-3 py-2 border text-xs text-gray-500">{item.category}</td>
+                              <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
+                              <td className="px-3 py-2 border">{item.unit}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                });
+              }
+
+              // ============ MODE: Group by Meal → Storage (original behavior) ============
               return mealOrder.filter(m => directItemsByMeal[m]).map(meal => {
                 const meta = mealConfig[meal] || mealConfig['Unassigned'];
                 const mealItems = Object.values(directItemsByMeal[meal]).flat();
@@ -985,7 +1157,12 @@ export default function CateringEventDetail() {
                               {items.map((item, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50">
                                   <td className="px-3 py-2 border text-center">
-                                    <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                                    <input
+                                      type="checkbox"
+                                      checked={!!item.pulled}
+                                      onChange={() => togglePulledDirect(item._idx)}
+                                      className="w-5 h-5 cursor-pointer accent-blue-600"
+                                    />
                                   </td>
                                   <td className="px-3 py-2 border font-medium">{item.name}</td>
                                   <td className="px-3 py-2 border text-xs text-gray-500">{item.category}</td>
@@ -1025,7 +1202,14 @@ export default function CateringEventDetail() {
                         .map((item, idx) => (
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="px-3 py-2 border text-center">
-                              <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                              {(() => { const _k = `recipe|${item.name}|${item.unit}`; return (
+                                <input
+                                  type="checkbox"
+                                  checked={!!pulledRecipeMap[_k]}
+                                  onChange={() => togglePulledRecipe(_k)}
+                                  className="w-5 h-5 cursor-pointer accent-blue-600"
+                                />
+                              ); })()}
                             </td>
                             <td className="px-3 py-2 border font-medium">{item.name}</td>
                             <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
@@ -1054,7 +1238,12 @@ export default function CateringEventDetail() {
                           .map((item, idx) => (
                             <tr key={idx} className="hover:bg-gray-50">
                               <td className="px-3 py-2 border text-center">
-                                <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                                <input
+                                  type="checkbox"
+                                  checked={!!item.pulled}
+                                  onChange={() => togglePulledDirect(item._idx)}
+                                  className="w-5 h-5 cursor-pointer accent-blue-600"
+                                />
                               </td>
                               <td className="px-3 py-2 border font-medium">{item.name}</td>
                               <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>
@@ -1085,7 +1274,14 @@ export default function CateringEventDetail() {
                         .map((item, idx) => (
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="px-3 py-2 border text-center">
-                              <div className="w-5 h-5 border-2 border-gray-400 rounded"></div>
+                              {(() => { const _k = `recipe|${item.name}|${item.unit}`; return (
+                                <input
+                                  type="checkbox"
+                                  checked={!!pulledRecipeMap[_k]}
+                                  onChange={() => togglePulledRecipe(_k)}
+                                  className="w-5 h-5 cursor-pointer accent-blue-600"
+                                />
+                              ); })()}
                             </td>
                             <td className="px-3 py-2 border font-medium">{item.name}</td>
                             <td className="px-3 py-2 border text-right font-bold">{item.quantity}</td>

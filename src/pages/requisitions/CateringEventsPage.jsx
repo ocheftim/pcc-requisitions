@@ -233,12 +233,20 @@ export default function CateringEventsPage() {
           <h1 className="text-3xl font-bold text-blue-600">Catering Events</h1>
           <p className="text-gray-500">{upcomingEvents.length} upcoming events</p>
         </div>
-        <button
-          onClick={openNewEvent}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-        >
-          + New Event
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate('/catering/consolidations')}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+          >
+            🔗 Consolidations
+          </button>
+          <button
+            onClick={openNewEvent}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+          >
+            + New Event
+          </button>
+        </div>
       </div>
 
       {/* Upcoming Events */}

@@ -24,6 +24,8 @@ import ImportPage from './pages/requisitions/ImportPage';
 // Pages - Catering
 import CateringEventsPage from './pages/requisitions/CateringEventsPage';
 import CateringEventDetail from './pages/requisitions/CateringEventDetail';
+import CateringConsolidationsPage from './pages/requisitions/CateringConsolidationsPage';
+import CateringConsolidationDetail from './pages/requisitions/CateringConsolidationDetail';
 
 // Icons
 const Icons = {
@@ -177,6 +179,8 @@ function App() {
           
           {/* Catering */}
           <Route path="/catering" element={<CateringEventsPage />} />
+          <Route path="/catering/consolidations" element={<CateringConsolidationsPage />} />
+          <Route path="/catering/consolidations/:consolidationId" element={<CateringConsolidationDetail />} />
           <Route path="/catering/:eventId" element={<CateringEventDetail />} />
           <Route path="/import" element={<ImportPage />} />
           
