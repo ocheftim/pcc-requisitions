@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
-const FOOD_CATEGORIES = ['produce','dairy & eggs','dairy','meat & seafood','pantry','pantry/dried fruit & nuts','pantry/nuts','flours','pantry/chocolates','chocolates','sugars','sweeteners','oils','baking','frozen','frozen foods','bakery & bread','bread','beverages','leaveners','spices','fruit','wine & spirits'];
+const FOOD_CATEGORIES = ['produce','dairy & eggs','dairy','meat & seafood','protein','pantry','pantry/dried fruit & nuts','pantry/nuts','flours','pantry/chocolates','chocolates','sugars','sweeteners','oils','baking','frozen','frozen foods','bakery & bread','bread','beverages','leaveners','spices','fruit','wine & spirits'];
 
 export default function PrintRequisitionPage() {
   const { id } = useParams();
@@ -32,7 +32,7 @@ export default function PrintRequisitionPage() {
   const foodItems = items.filter(i => FOOD_CATEGORIES.includes((i.category || "").toLowerCase()));
   const nonFoodItems = items.filter(i => !FOOD_CATEGORIES.includes((i.category || "").toLowerCase()));
   
-  const categoryOrder = ['Produce','Dairy & Eggs','Dairy','Meat & Seafood','Flours','Pantry/Chocolates','Chocolates','Sugars','Sweeteners','Pantry','Pantry/Dried Fruit & Nuts','Pantry/Nuts','Oils','Baking','Leaveners','Spices','Frozen','Frozen Foods','Bakery & Bread','Bread','Beverages','Fruit','Wine & Spirits'];
+  const categoryOrder = ['Produce','Dairy & Eggs','Dairy','Meat & Seafood','Protein','Flours','Pantry/Chocolates','Chocolates','Sugars','Sweeteners','Pantry','Pantry/Dried Fruit & Nuts','Pantry/Nuts','Oils','Baking','Leaveners','Spices','Frozen','Frozen Foods','Bakery & Bread','Bread','Beverages','Fruit','Wine & Spirits'];
   const sortedFoodItems = [...foodItems].sort((a, b) => {
     const aIdx = categoryOrder.findIndex(c => c.toLowerCase() === (a.category || '').toLowerCase());
     const bIdx = categoryOrder.findIndex(c => c.toLowerCase() === (b.category || '').toLowerCase());
@@ -118,7 +118,7 @@ export default function PrintRequisitionPage() {
 
   const handleCopyForEmail = () => {
     const categories = {};
-    const catOrder = ["Produce", "Dairy & Eggs", "Meat & Seafood", "Dairy", "Flours", "Baking", "Chocolates", "Sugars", "Leaveners", "Pantry", "Pantry/Nuts", "Frozen", "Frozen Foods", "Oils", "Spices", "Wine & Spirits", "Bakery & Bread", "Beverages", "Supplies", "Other"];
+    const catOrder = ["Produce", "Dairy & Eggs", "Meat & Seafood", "Protein", "Dairy", "Flours", "Baking", "Chocolates", "Sugars", "Leaveners", "Pantry", "Pantry/Nuts", "Frozen", "Frozen Foods", "Oils", "Spices", "Wine & Spirits", "Bakery & Bread", "Beverages", "Supplies", "Other"];
     [...sortedFoodItems, ...nonFoodItems].forEach(item => {
       const cat = item.category || "Other";
       if (!categories[cat]) categories[cat] = [];

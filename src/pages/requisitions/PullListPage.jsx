@@ -9,6 +9,18 @@ export default function PullListPage() {
   const [courseFilter, setCourseFilter] = useState('');
   const printRef = useRef();
 
+  // Timezone-safe formatter for YYYY-MM-DD class_date strings.
+  // new Date('2026-05-06') is parsed as UTC midnight, which renders as
+  // the prior day in any TZ west of UTC (e.g., Tucson MST). Parse the
+  // parts manually instead.
+  const formatClassDate = (d) => {
+    if (!d) return '-';
+    const str = String(d).split('T')[0];
+    const [y, m, day] = str.split('-').map(Number);
+    if (!y || !m || !day) return '-';
+    return new Date(y, m - 1, day).toLocaleDateString();
+  };
+
   // Load requisitions
   useEffect(() => {
     async function load() {
@@ -67,52 +79,67 @@ export default function PullListPage() {
     return requisitions.find(r => r.id === selectedReqId);
   }, [requisitions, selectedReqId]);
 
-  // Categorize ingredients
+  // Categorize ingredients — read the category field from the DB directly.
+  // Falls back to 'Other' for legacy items with no category. Matching is
+  // case-insensitive so legacy variants like 'BAKING' or 'dairy' group cleanly.
   const categorizedIngredients = useMemo(() => {
     if (!selectedReq) return {};
-    
-    const categories = {
-      'Produce': [],
-      'Dairy & Eggs': [],
-      'Meat & Seafood': [],
-      'Dry Goods': [],
-      'Baking': [],
-      'Spices': [],
-      'Other': [],
-      'Equipment': [],
-    };
-    
-    const categoryKeywords = {
-      'Produce': ['lettuce', 'tomato', 'onion', 'garlic', 'carrot', 'celery', 'pepper', 'mushroom', 'herb', 'basil', 'parsley', 'cilantro', 'lemon', 'lime', 'orange', 'apple', 'berry', 'strawberry', 'fruit', 'vegetable'],
-      'Dairy & Eggs': ['milk', 'cream', 'butter', 'cheese', 'yogurt', 'egg', 'sour cream'],
-      'Meat & Seafood': ['beef', 'pork', 'chicken', 'turkey', 'lamb', 'fish', 'salmon', 'shrimp', 'bacon', 'sausage'],
-      'Baking': ['flour', 'sugar', 'yeast', 'baking', 'vanilla', 'chocolate', 'cocoa', 'couverture', 'fondant'],
-      'Dry Goods': ['rice', 'pasta', 'noodle', 'bean', 'lentil', 'oil', 'vinegar', 'pretzel', 'cracker'],
-      'Spices': ['salt', 'pepper', 'cumin', 'paprika', 'oregano', 'cinnamon', 'nutmeg', 'spice', 'seasoning'],
-      'Equipment': ['pan', 'pot', 'machine', 'scraper', 'brush', 'slab', 'sheet', 'paper', 'skewer', 'stick', 'kit', 'warmer', 'mold', 'cutter'],
-    };
-    
+
+    // Display order — items grouped under these headers in this order.
+    // Anything else (including null/missing category) falls into 'Other'.
+    const CATEGORY_ORDER = [
+      'Produce',
+      'Dairy & Eggs',
+      'Meat & Seafood',
+      'Protein',
+      'Flours',
+      'Sugars',
+      'Sweeteners',
+      'Leaveners',
+      'Spices',
+      'Oils',
+      'Pantry',
+      'Pantry/Nuts',
+      'Pantry/Dried Fruit & Nuts',
+      'Chocolates',
+      'Pantry/Chocolates',
+      'Baking',
+      'Frozen',
+      'Frozen Foods',
+      'Bakery & Bread',
+      'Bread',
+      'Beverages',
+      'Wine & Spirits',
+      'Fruit',
+      'Supplies',
+      'Equipment',
+      'Other',
+    ];
+
+    // Build a lowercase lookup so DB category strings match the canonical label.
+    const canonical = {};
+    CATEGORY_ORDER.forEach(c => { canonical[c.toLowerCase()] = c; });
+
+    const buckets = {};
     (selectedReq.ingredients || []).forEach(ing => {
-      const name = (ing.name || '').toLowerCase();
-      let assigned = false;
-      
-      for (const [category, keywords] of Object.entries(categoryKeywords)) {
-        if (keywords.some(kw => name.includes(kw))) {
-          categories[category].push(ing);
-          assigned = true;
-          break;
-        }
-      }
-      
-      if (!assigned) {
-        categories['Other'].push(ing);
-      }
+      const raw = (ing.category || '').trim();
+      const key = canonical[raw.toLowerCase()] || (raw ? raw : 'Other');
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(ing);
     });
-    
-    // Remove empty categories
-    return Object.fromEntries(
-      Object.entries(categories).filter(([_, items]) => items.length > 0)
-    );
+
+    // Emit in CATEGORY_ORDER first, then any unrecognized categories alphabetically,
+    // with 'Other' always last.
+    const result = {};
+    CATEGORY_ORDER.forEach(c => {
+      if (c !== 'Other' && buckets[c]) result[c] = buckets[c];
+    });
+    Object.keys(buckets)
+      .filter(k => !CATEGORY_ORDER.includes(k))
+      .sort()
+      .forEach(k => { result[k] = buckets[k]; });
+    if (buckets['Other']) result['Other'] = buckets['Other'];
+    return result;
   }, [selectedReq]);
 
   // Print handler
@@ -124,7 +151,7 @@ export default function PullListPage() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Pull List - ${selectedReq?.course} - ${selectedReq?.class_date}</title>
+        <title>Pull List - ${selectedReq?.course} - ${formatClassDate(selectedReq?.class_date)}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
           h1 { font-size: 20px; margin-bottom: 5px; }
@@ -262,7 +289,7 @@ export default function PullListPage() {
                 </div>
                 <div className="text-sm text-gray-500 mt-1">
                   {req.instructor && <span>Instructor: {req.instructor}</span>}
-                  {req.class_date && <span className="ml-3">{new Date(req.class_date).toLocaleDateString()}</span>}
+                  {req.class_date && <span className="ml-3">{formatClassDate(req.class_date)}</span>}
                 </div>
               </button>
             ))}
@@ -293,7 +320,7 @@ export default function PullListPage() {
             </h1>
             <div className="header-info" style={{ color: '#666', marginBottom: '16px' }}>
               <div><strong>Topic:</strong> {selectedReq.week || selectedReq.name || '-'}</div>
-              <div><strong>Date:</strong> {selectedReq.class_date ? new Date(selectedReq.class_date).toLocaleDateString() : '-'}</div>
+              <div><strong>Date:</strong> {formatClassDate(selectedReq.class_date)}</div>
               <div><strong>Instructor:</strong> {selectedReq.instructor || '-'}</div>
               <div><strong>Students:</strong> {selectedReq.students || '-'}</div>
             </div>
